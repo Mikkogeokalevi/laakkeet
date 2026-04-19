@@ -231,6 +231,7 @@ const MedicineTracker = () => {
   const [deleteDialog, setDeleteDialog] = useState({ isOpen: false, mode: null, medId: null, medName: '', logId: null, hasHistory: false, message: '' });
   const [showArchived, setShowArchived] = useState(false);
   const [showHistoryFor, setShowHistoryFor] = useState(null);
+  const notifiedReminderKeysRef = useRef(new Set());
 
   // Auth Listener
   useEffect(() => {
@@ -371,33 +372,52 @@ const MedicineTracker = () => {
 
   useEffect(() => {
     if (!notificationsEnabled || medications.length === 0) return;
+    if (!("Notification" in window) || Notification.permission !== 'granted') return;
+
     const checkReminders = () => {
       const now = new Date();
-      const currentTime = now.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
       const currentWeekday = now.getDay();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const today = now.toDateString();
+
       medications.forEach(med => {
         if (med.isArchived) return;
-        if (med.alertEnabled === false) return; 
+        if (med.alertEnabled === false) return;
 
         const activeWeekdays = med.weekdays || [0,1,2,3,4,5,6];
         if (!activeWeekdays.includes(currentWeekday)) return;
-        if (med.scheduleTimes) {
-          Object.entries(med.scheduleTimes).forEach(([slotId, time]) => {
-            if (time === currentTime) {
-              const today = now.toDateString();
-              const alreadyTaken = logs.some(l => l.medId === med.id && l.slot === slotId && new Date(l.timestamp).toDateString() === today);
-              if (!alreadyTaken) {
-                new Notification(`Lääkkeen aika: ${med.name}`, {
-                  body: `Aika ottaa ${TIME_SLOTS.find(s => s.id === slotId)?.label || ''} lääke.`,
-                  icon: "./laakkeet_logo.png"
-                });
-              }
-            }
+
+        const schedule = med.schedule || [];
+        schedule.forEach((slotId) => {
+          const timeStr = med.scheduleTimes?.[slotId] || TIME_SLOTS.find(s => s.id === slotId)?.defaultTime;
+          if (!timeStr) return;
+
+          const [h, m] = timeStr.split(':').map(Number);
+          if (Number.isNaN(h) || Number.isNaN(m)) return;
+
+          const slotMinutes = h * 60 + m;
+          const isReminderMinute = currentMinutes >= slotMinutes && currentMinutes <= slotMinutes + 1;
+          if (!isReminderMinute) return;
+
+          const alreadyTaken = logs.some(
+            l => l.medId === med.id && l.slot === slotId && new Date(l.timestamp).toDateString() === today
+          );
+          if (alreadyTaken) return;
+
+          const reminderKey = `${today}|${med.id}|${slotId}`;
+          if (notifiedReminderKeysRef.current.has(reminderKey)) return;
+
+          notifiedReminderKeysRef.current.add(reminderKey);
+          new Notification(`Lääkkeen aika: ${med.name}`, {
+            body: `Aika ottaa ${TIME_SLOTS.find(s => s.id === slotId)?.label || ''} lääke.`,
+            icon: "./laakkeet_logo.png"
           });
-        }
+        });
       });
     };
-    const interval = setInterval(checkReminders, 60000); 
+
+    checkReminders();
+    const interval = setInterval(checkReminders, 30000);
     return () => clearInterval(interval);
   }, [medications, logs, notificationsEnabled]);
 
