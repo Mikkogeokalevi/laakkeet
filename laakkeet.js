@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Plus, Pill, Clock, Trash2, CheckCircle, History, X, BarChart2, Calendar, AlertTriangle, Pencil, CalendarPlus, LogOut, User, Lock, Loader2, Archive, ArchiveRestore, ChevronDown, ChevronUp, Check, Zap, Bell, BellOff, ArrowUpDown, ArrowUp, ArrowDown, HelpCircle, Package, RefreshCw, ShoppingCart, FileText, Clipboard, MessageSquare, ListChecks, RotateCcw, Share, MoreVertical, PlusSquare, Filter, Layers, LayoutList, Link, Box, Component, Menu, Search, Info, List, CalendarDays, AlertCircle, Volume2, VolumeX } from 'lucide-react';
+import { Plus, Pill, Clock, Trash2, CheckCircle, History, X, BarChart2, Calendar, AlertTriangle, Pencil, CalendarPlus, LogOut, User, Lock, Loader2, Archive, ArchiveRestore, ChevronDown, ChevronUp, Check, Zap, Bell, BellOff, ArrowUpDown, ArrowUp, ArrowDown, HelpCircle, Package, RefreshCw, ShoppingCart, FileText, Clipboard, MessageSquare, ListChecks, RotateCcw, Share, MoreVertical, PlusSquare, Filter, Layers, LayoutList, Link, Box, Component, Menu, Search, Info, List, CalendarDays, AlertCircle, Volume2, VolumeX, Moon, Sun } from 'lucide-react';
 
 import { ohjeData } from './ohjeet.js';
 import { auth, db, APP_ID } from './firebase.js';
@@ -162,6 +162,13 @@ const MedicineTracker = () => {
   const [logs, setLogs] = useState([]);
   
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    try {
+      return localStorage.getItem('laakkeet-dark-mode') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [isReordering, setIsReordering] = useState(false);
   const [expandedMedId, setExpandedMedId] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
@@ -235,6 +242,14 @@ const MedicineTracker = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [showHistoryFor, setShowHistoryFor] = useState(null);
   const notifiedReminderKeysRef = useRef(new Set());
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('laakkeet-dark-mode', isDarkMode ? '1' : '0');
+    } catch {
+      // ei estä käyttöä, vaikka localStorage ei olisi saatavilla
+    }
+  }, [isDarkMode]);
 
   const parseDateOnly = (dateStr) => {
     if (!dateStr) return null;
@@ -1199,7 +1214,7 @@ const MedicineTracker = () => {
   if (!user) return <AuthScreen />;
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 font-sans overflow-hidden select-none relative">
+    <div className={`flex flex-col h-screen bg-slate-50 font-sans overflow-hidden select-none relative ${isDarkMode ? 'dark-mode' : ''}`}>
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
          <img src="./laakkeet_logo.png" alt="" className="w-3/4 max-w-lg opacity-[0.15] grayscale" />
       </div>
@@ -1263,6 +1278,10 @@ const MedicineTracker = () => {
                         <div className="h-px bg-slate-100 my-1"></div>
                         <button onClick={() => {setIsReordering(!isReordering); setIsMenuOpen(false);}} className={`flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-sm font-medium text-left ${isReordering ? 'bg-blue-50 text-blue-700' : 'text-slate-700'}`}>
                           <ArrowUpDown size={18} className={isReordering ? 'text-blue-600' : 'text-slate-400'}/> Järjestä
+                        </button>
+                        <button onClick={() => { setIsDarkMode(!isDarkMode); setIsMenuOpen(false); }} className={`flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-sm font-medium text-left ${isDarkMode ? 'bg-slate-100 text-slate-900' : 'text-slate-700'}`}>
+                          {isDarkMode ? <Sun size={18} className="text-amber-500"/> : <Moon size={18} className="text-slate-400"/>}
+                          {isDarkMode ? 'Vaalea teema' : 'Tumma teema'}
                         </button>
                         <div className="h-px bg-slate-100 my-1"></div>
                         <button onClick={() => {handleLogout(); setIsMenuOpen(false);}} className="flex items-center gap-3 p-3 rounded-lg hover:bg-red-50 text-red-600 text-sm font-medium text-left">
