@@ -208,6 +208,8 @@ const MedicineTracker = () => {
   const [selectedSchedule, setSelectedSchedule] = useState([]); 
   const [selectedWeekdays, setSelectedWeekdays] = useState([0,1,2,3,4,5,6]); 
   const [scheduleTimes, setScheduleTimes] = useState({});
+  const [newUseStartDate, setNewUseStartDate] = useState('');
+  const [newUseEndDate, setNewUseEndDate] = useState('');
 
   // PIKALISÄYS TILA
   const [isQuickAdding, setIsQuickAdding] = useState(false);
@@ -233,6 +235,31 @@ const MedicineTracker = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [showHistoryFor, setShowHistoryFor] = useState(null);
   const notifiedReminderKeysRef = useRef(new Set());
+
+  const parseDateOnly = (dateStr) => {
+    if (!dateStr) return null;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d, 0, 0, 0, 0);
+  };
+
+  const isWithinUsagePeriod = (med, targetDate = new Date()) => {
+    const day = new Date(targetDate);
+    day.setHours(0, 0, 0, 0);
+
+    const start = parseDateOnly(med.useStartDate);
+    const end = parseDateOnly(med.useEndDate);
+
+    if (start && day < start) return false;
+    if (end && day > end) return false;
+    return true;
+  };
+
+  const isMedActiveOnDate = (med, targetDate = new Date()) => {
+    if (!isWithinUsagePeriod(med, targetDate)) return false;
+    const activeWeekdays = med.weekdays || [0,1,2,3,4,5,6];
+    return activeWeekdays.includes(new Date(targetDate).getDay());
+  };
 
   // Auth Listener
   useEffect(() => {
@@ -287,9 +314,7 @@ const MedicineTracker = () => {
 
       medications.forEach(med => {
         if (med.isArchived || med.alertEnabled === false) return;
-        
-        const activeWeekdays = med.weekdays || [0,1,2,3,4,5,6];
-        if (!activeWeekdays.includes(currentWeekday)) return;
+        if (!isMedActiveOnDate(med, now)) return;
 
         if (med.schedule) {
           med.schedule.forEach(slotId => {
@@ -384,9 +409,7 @@ const MedicineTracker = () => {
       medications.forEach(med => {
         if (med.isArchived) return;
         if (med.alertEnabled === false) return;
-
-        const activeWeekdays = med.weekdays || [0,1,2,3,4,5,6];
-        if (!activeWeekdays.includes(currentWeekday)) return;
+        if (!isMedActiveOnDate(med, now)) return;
 
         const schedule = med.schedule || [];
         schedule.forEach((slotId) => {
@@ -452,6 +475,7 @@ const MedicineTracker = () => {
     setNewMedLowLimit('10'); setNewMedIsCourse(false);
     setSelectedColor(getSmartColor()); setSelectedSchedule([]); setScheduleTimes({});
     setSelectedWeekdays([0,1,2,3,4,5,6]);
+    setNewUseStartDate(''); setNewUseEndDate('');
     setNewMedAlertEnabled(true); 
     setCurrentIngredients([]);
     setShowOnDashboard(true);
@@ -515,6 +539,10 @@ const MedicineTracker = () => {
   const handleAddMedication = async (e) => {
     e.preventDefault();
     if (!newMedName.trim() || !user) return;
+    if (newUseStartDate && newUseEndDate && newUseEndDate < newUseStartDate) {
+      alert("Käyttöjakson loppupäivä ei voi olla ennen alkupäivää.");
+      return;
+    }
     
     if (addMode === 'dosett' && currentIngredients.length === 0) {
       alert("Dosetissa täytyy olla vähintään yksi lääke!");
@@ -534,6 +562,8 @@ const MedicineTracker = () => {
         schedule: selectedSchedule, 
         scheduleTimes: scheduleTimes,
         weekdays: selectedWeekdays,
+        useStartDate: newUseStartDate || null,
+        useEndDate: newUseEndDate || null,
         ingredients: addMode === 'dosett' ? currentIngredients : [], 
         showOnDashboard: addMode === 'dosett' ? true : showOnDashboard,
         alertEnabled: newMedAlertEnabled,
@@ -553,6 +583,10 @@ const MedicineTracker = () => {
   const handleUpdateMedication = async (e) => {
     e.preventDefault();
     if (!editingMed || !editingMed.name.trim() || !user) return;
+    if (editingMed.useStartDate && editingMed.useEndDate && editingMed.useEndDate < editingMed.useStartDate) {
+      alert("Käyttöjakson loppupäivä ei voi olla ennen alkupäivää.");
+      return;
+    }
     try {
       const medRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', editingMed.id);
       const batch = writeBatch(db);
@@ -567,6 +601,8 @@ const MedicineTracker = () => {
         schedule: editingMed.schedule || [], 
         scheduleTimes: editingMed.scheduleTimes || {},
         weekdays: editingMed.weekdays || [0,1,2,3,4,5,6],
+        useStartDate: editingMed.useStartDate || null,
+        useEndDate: editingMed.useEndDate || null,
         ingredients: currentIngredients,
         showOnDashboard: editingMed.showOnDashboard !== undefined ? editingMed.showOnDashboard : true,
         alertEnabled: editingMed.alertEnabled !== undefined ? editingMed.alertEnabled : true 
@@ -580,6 +616,8 @@ const MedicineTracker = () => {
     setEditingMed({
       ...med, 
       weekdays: med.weekdays || [0,1,2,3,4,5,6],
+      useStartDate: med.useStartDate || '',
+      useEndDate: med.useEndDate || '',
       alertEnabled: med.alertEnabled !== undefined ? med.alertEnabled : true 
     });
     setCurrentIngredients(med.ingredients || []);
@@ -912,9 +950,7 @@ const MedicineTracker = () => {
   const activeMeds = medications.filter(m => {
     if (m.isArchived) return false;
     if (m.showOnDashboard === false) return false;
-    const today = new Date().getDay();
-    const activeDays = m.weekdays || [0,1,2,3,4,5,6];
-    return activeDays.includes(today);
+    return isMedActiveOnDate(m, new Date());
   });
 
   const archivedMeds = medications.filter(m => m.isArchived);
@@ -1959,6 +1995,32 @@ const MedicineTracker = () => {
                 </div>
               )}
 
+              {(!editingMed.ingredients || editingMed.ingredients.length === 0) && (
+                <div className="mb-6 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Käyttöjakso (valinnainen)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Alkaa</label>
+                      <input
+                        type="date"
+                        className="w-full bg-white p-2 rounded-lg text-sm border focus:border-blue-500"
+                        value={editingMed.useStartDate || ''}
+                        onChange={(e) => setEditingMed({ ...editingMed, useStartDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Loppuu</label>
+                      <input
+                        type="date"
+                        className="w-full bg-white p-2 rounded-lg text-sm border focus:border-blue-500"
+                        value={editingMed.useEndDate || ''}
+                        onChange={(e) => setEditingMed({ ...editingMed, useEndDate: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="mb-4">
                  <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Viikonpäivät</label>
                  <div className="flex justify-between mb-4 bg-slate-50 p-2 rounded-xl border border-slate-200">
@@ -2088,6 +2150,19 @@ const MedicineTracker = () => {
               {addMode === 'single' && (
                 <>
                   <input className="w-full bg-slate-50 p-3 rounded-xl text-base mb-6 border focus:border-blue-500" placeholder="Annostus" value={newMedDosage} onChange={e => setNewMedDosage(e.target.value)} />
+                  <div className="mb-6 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Käyttöjakso (valinnainen)</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Alkaa</label>
+                        <input type="date" className="w-full bg-white p-2 rounded-lg text-sm border" value={newUseStartDate} onChange={e => setNewUseStartDate(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Loppuu</label>
+                        <input type="date" className="w-full bg-white p-2 rounded-lg text-sm border" value={newUseEndDate} onChange={e => setNewUseEndDate(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
                   <div className="mb-6 bg-slate-50 p-3 rounded-xl border border-slate-200">
                     <label className="flex items-center gap-2 mb-2 cursor-pointer">
                       <input type="checkbox" checked={newMedTrackStock} onChange={(e) => setNewMedTrackStock(e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
