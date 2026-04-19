@@ -74,7 +74,7 @@ const HelpView = ({ onClose }) => {
 };
 
 // --- KIRJAUTUMISNÄKYMÄ ---
-const AuthScreen = () => {
+const AuthScreen = ({ isDarkMode = false, onToggleTheme }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -106,11 +106,20 @@ const AuthScreen = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 relative overflow-hidden">
+    <div className={`app-shell min-h-screen flex items-center justify-center p-4 bg-slate-50 relative overflow-hidden ${isDarkMode ? 'dark-mode' : ''}`}>
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
          <img src="./laakkeet_logo.png" alt="" className="w-3/4 opacity-[0.15] grayscale" />
       </div>
       <div className="w-full max-w-sm bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-xl z-10 border border-white">
+        <div className="flex justify-end mb-2">
+          <button
+            type="button"
+            onClick={() => onToggleTheme && onToggleTheme()}
+            className="text-xs font-bold px-2 py-1 rounded-md bg-slate-100 text-slate-600"
+          >
+            {isDarkMode ? 'Vaalea teema' : 'Tumma teema'}
+          </button>
+        </div>
         <div className="flex justify-center mb-6">
           <img src="./laakkeet_logo.png" alt="Logo" className="h-16 w-auto object-contain" />
         </div>
@@ -217,6 +226,9 @@ const MedicineTracker = () => {
   const [scheduleTimes, setScheduleTimes] = useState({});
   const [newUseStartDate, setNewUseStartDate] = useState('');
   const [newUseEndDate, setNewUseEndDate] = useState('');
+  const [templateOnDays, setTemplateOnDays] = useState('14');
+  const [templateOffDays, setTemplateOffDays] = useState('14');
+  const [templateCycles, setTemplateCycles] = useState('3');
 
   // PIKALISÄYS TILA
   const [isQuickAdding, setIsQuickAdding] = useState(false);
@@ -258,6 +270,21 @@ const MedicineTracker = () => {
     return new Date(y, m - 1, d, 0, 0, 0, 0);
   };
 
+  const toDateInputValue = (dateObj) => {
+    if (!dateObj) return '';
+    const y = dateObj.getFullYear();
+    const m = `${dateObj.getMonth() + 1}`.padStart(2, '0');
+    const d = `${dateObj.getDate()}`.padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const addDays = (dateObj, days) => {
+    const d = new Date(dateObj);
+    d.setDate(d.getDate() + days);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
   const getUsagePeriods = (med) => {
     const periods = [];
     if (med.useStartDate || med.useEndDate) {
@@ -275,6 +302,36 @@ const MedicineTracker = () => {
       const aStart = parseDateOnly(a.startDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
       const bStart = parseDateOnly(b.startDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
       return aStart - bStart;
+    });
+  };
+
+  const applyRecurrenceTemplateToEditing = () => {
+    if (!editingMed) return;
+    const onDays = Math.max(1, parseInt(templateOnDays, 10) || 14);
+    const offDays = Math.max(0, parseInt(templateOffDays, 10) || 14);
+    const cycles = Math.max(1, parseInt(templateCycles, 10) || 1);
+
+    const periods = getUsagePeriods(editingMed);
+    const latestPeriod = periods[periods.length - 1];
+    const anchor = parseDateOnly(latestPeriod?.endDate || latestPeriod?.startDate || editingMed.useEndDate || editingMed.useStartDate);
+
+    if (!anchor) {
+      alert('Aseta ensin käyttöjakso (alkaa/loppuu), jotta toistopohja voidaan luoda.');
+      return;
+    }
+
+    let cursor = new Date(anchor);
+    const generated = [];
+    for (let i = 0; i < cycles; i += 1) {
+      const start = addDays(cursor, offDays + 1);
+      const end = addDays(start, onDays - 1);
+      generated.push({ startDate: toDateInputValue(start), endDate: toDateInputValue(end) });
+      cursor = end;
+    }
+
+    setEditingMed({
+      ...editingMed,
+      scheduledPeriods: [...(editingMed.scheduledPeriods || []), ...generated]
     });
   };
 
@@ -321,7 +378,8 @@ const MedicineTracker = () => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const activePeriod = periods.find((period) => isDateWithinPeriod(now, period));
-    const periodToShow = activePeriod || periods[0];
+    const nextFuturePeriod = getNextFutureUsagePeriod(med, now);
+    const periodToShow = activePeriod || nextFuturePeriod || periods[periods.length - 1];
     const start = formatDateFi(periodToShow.startDate);
     const end = formatDateFi(periodToShow.endDate);
     if (start && end) return `Käyttöjakso: ${start} - ${end}`;
@@ -332,6 +390,71 @@ const MedicineTracker = () => {
 
   const isFutureScheduledMed = (med, targetDate = new Date()) => {
     return !!getNextFutureUsagePeriod(med, targetDate);
+  };
+
+  const getUsageTimeline = (med, targetDate = new Date()) => {
+    const day = new Date(targetDate);
+    day.setHours(0, 0, 0, 0);
+    return getUsagePeriods(med).map((period) => {
+      const start = parseDateOnly(period.startDate);
+      const end = parseDateOnly(period.endDate);
+      let status = 'future';
+      if (isDateWithinPeriod(day, period)) status = 'current';
+      else if (end && day > end) status = 'past';
+      else if (!end && start && day >= start) status = 'current';
+      return { ...period, status };
+    });
+  };
+
+  const handleQuickScheduleNextPeriod = async (med) => {
+    if (!user) return;
+    const periods = getUsagePeriods(med);
+    if (periods.length === 0) {
+      alert('Aseta ensin lääkkeelle käyttöjakso (alku/loppu), niin jatkojakso voidaan luoda automaattisesti.');
+      return;
+    }
+
+    const latestPeriod = periods
+      .slice()
+      .sort((a, b) => {
+        const aAnchor = parseDateOnly(a.endDate || a.startDate)?.getTime() || 0;
+        const bAnchor = parseDateOnly(b.endDate || b.startDate)?.getTime() || 0;
+        return bAnchor - aAnchor;
+      })[0];
+
+    const anchor = parseDateOnly(latestPeriod.endDate || latestPeriod.startDate);
+    if (!anchor) {
+      alert('Seuraavan jakson luonti epäonnistui: nykyisestä jaksosta puuttuu päivämäärä.');
+      return;
+    }
+
+    const latestStart = parseDateOnly(latestPeriod.startDate);
+    const latestEnd = parseDateOnly(latestPeriod.endDate);
+    const latestDurationDays = latestStart && latestEnd
+      ? Math.max(1, Math.round((latestEnd.getTime() - latestStart.getTime()) / 86400000) + 1)
+      : 14;
+
+    const pauseDays = 14;
+    const nextStart = addDays(anchor, pauseDays + 1);
+    const nextEnd = addDays(nextStart, latestDurationDays - 1);
+
+    const ok = window.confirm(
+      `Lisätäänkö seuraava kuuri lääkkeelle ${med.name}?\n\n` +
+      `Tauko: ${pauseDays} päivää\n` +
+      `Uusi jakso: ${formatDateFi(toDateInputValue(nextStart))} - ${formatDateFi(toDateInputValue(nextEnd))}`
+    );
+    if (!ok) return;
+
+    try {
+      const medRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', med.id);
+      const nextPeriods = [
+        ...(med.scheduledPeriods || []),
+        { startDate: toDateInputValue(nextStart), endDate: toDateInputValue(nextEnd) }
+      ];
+      await updateDoc(medRef, { scheduledPeriods: nextPeriods });
+    } catch {
+      alert('Seuraavan jakson lisäys epäonnistui.');
+    }
   };
 
   // Auth Listener
@@ -515,6 +638,36 @@ const MedicineTracker = () => {
     const interval = setInterval(checkReminders, 30000);
     return () => clearInterval(interval);
   }, [medications, logs, notificationsEnabled]);
+
+  useEffect(() => {
+    if (!notificationsEnabled || !user) return;
+    if (!("Notification" in window) || Notification.permission !== 'granted') return;
+
+    const tomorrow = addDays(new Date(), 1);
+    const startsTomorrow = medications.filter((med) => {
+      if (med.isArchived || med.alertEnabled === false) return false;
+      return getUsagePeriods(med).some((period) => {
+        const start = parseDateOnly(period.startDate);
+        return !!start && start.getTime() === tomorrow.getTime();
+      });
+    });
+
+    if (startsTomorrow.length === 0) return;
+
+    const dedupeKey = `startsTomorrow:${user.uid}:${toDateInputValue(tomorrow)}`;
+    try {
+      if (localStorage.getItem(dedupeKey) === '1') return;
+      localStorage.setItem(dedupeKey, '1');
+    } catch {
+      // jos localStorage ei toimi, jatketaan ilman deduplikointia
+    }
+
+    const names = startsTomorrow.slice(0, 3).map((m) => m.name).join(', ');
+    new Notification('Kuurisi alkaa huomenna', {
+      body: startsTomorrow.length > 3 ? `${names} + ${startsTomorrow.length - 3} muuta` : names,
+      icon: './laakkeet_logo.png'
+    });
+  }, [notificationsEnabled, medications, user]);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -709,6 +862,9 @@ const MedicineTracker = () => {
         : [],
       alertEnabled: med.alertEnabled !== undefined ? med.alertEnabled : true 
     });
+    setTemplateOnDays('14');
+    setTemplateOffDays('14');
+    setTemplateCycles('3');
     setCurrentIngredients(med.ingredients || []);
   };
 
@@ -1073,6 +1229,18 @@ const MedicineTracker = () => {
       return aStart - bStart;
     });
 
+  const tomorrowDate = addDays(new Date(), 1);
+  const tomorrowStartMeds = medications
+    .filter(m => !m.isArchived && m.showOnDashboard !== false)
+    .map((med) => {
+      const tomorrowPeriod = getUsagePeriods(med).find((period) => {
+        const start = parseDateOnly(period.startDate);
+        return !!start && start.getTime() === tomorrowDate.getTime();
+      });
+      return tomorrowPeriod ? { med, period: tomorrowPeriod } : null;
+    })
+    .filter(Boolean);
+
   const archivedMeds = medications.filter(m => m.isArchived);
   
   const shoppingListMeds = medications.filter(m => {
@@ -1210,11 +1378,11 @@ const MedicineTracker = () => {
     setReportSelectedMeds(newSet);
   };
 
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
-  if (!user) return <AuthScreen />;
+  if (authLoading) return <div className={`app-shell min-h-screen flex items-center justify-center bg-slate-50 ${isDarkMode ? 'dark-mode' : ''}`}><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
+  if (!user) return <AuthScreen isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode((prev) => !prev)} />;
 
   return (
-    <div className={`flex flex-col h-screen bg-slate-50 font-sans overflow-hidden select-none relative ${isDarkMode ? 'dark-mode' : ''}`}>
+    <div className={`app-shell flex flex-col h-screen bg-slate-50 font-sans overflow-hidden select-none relative ${isDarkMode ? 'dark-mode' : ''}`}>
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
          <img src="./laakkeet_logo.png" alt="" className="w-3/4 max-w-lg opacity-[0.15] grayscale" />
       </div>
@@ -1325,6 +1493,18 @@ const MedicineTracker = () => {
                 <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl mb-2 flex items-center gap-3 animate-pulse">
                    <AlertCircle size={20} className="text-red-600" />
                    <span className="font-bold text-sm">Huomio: {criticalStockCount} lääkettä loppumassa!</span>
+                </div>
+              )}
+
+              {tomorrowStartMeds.length > 0 && (
+                <div className="bg-indigo-100 border border-indigo-300 text-indigo-800 p-3 rounded-xl mb-2">
+                  <div className="font-bold text-xs uppercase tracking-wide mb-1">Kuurit alkavat huomenna</div>
+                  <div className="text-xs space-y-1">
+                    {tomorrowStartMeds.slice(0, 3).map(({ med }) => (
+                      <div key={`tomorrow-${med.id}`} className="font-semibold">• {med.name}</div>
+                    ))}
+                    {tomorrowStartMeds.length > 3 && <div className="text-[11px]">+{tomorrowStartMeds.length - 3} muuta</div>}
+                  </div>
                 </div>
               )}
 
@@ -1529,6 +1709,7 @@ const MedicineTracker = () => {
 
                          <div className="flex gap-2 mb-4 justify-end flex-wrap">
                             {!isCombo && med.trackStock && <button onClick={() => handleRefill(med)} className="p-2 bg-white/60 rounded-lg hover:text-green-600 hover:bg-white flex items-center gap-1" title="Täydennä varastoa"><RefreshCw size={18}/></button>}
+                            {!isCombo && <button onClick={() => handleQuickScheduleNextPeriod(med)} className="p-2 bg-white/60 rounded-lg hover:text-indigo-600 hover:bg-white" title="Ajasta seuraava jakso (+14 pv tauko)"><CalendarDays size={18}/></button>}
                             <button onClick={() => { setManualLogMed(med); setManualDate(getCurrentDateTimeLocal()); }} className="p-2 bg-white/60 rounded-lg hover:text-blue-600 hover:bg-white" title="Lisää manuaalisesti"><CalendarPlus size={18}/></button>
                             <button onClick={() => { setShowHistoryFor(med.id); setHistorySource(null); }} className="p-2 bg-white/60 rounded-lg hover:text-blue-600 hover:bg-white" title="Historia"><History size={18}/></button>
                             <button onClick={() => setEditingMed(med)} className="p-2 bg-white/60 rounded-lg hover:text-blue-600 hover:bg-white" title="Muokkaa"><Pencil size={18}/></button>
@@ -2226,6 +2407,49 @@ const MedicineTracker = () => {
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-slate-200">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Toistopohja</div>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">Kuuri (pv)</label>
+                        <input type="number" min="1" className="w-full bg-white p-2 rounded-lg text-sm border" value={templateOnDays} onChange={(e) => setTemplateOnDays(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">Tauko (pv)</label>
+                        <input type="number" min="0" className="w-full bg-white p-2 rounded-lg text-sm border" value={templateOffDays} onChange={(e) => setTemplateOffDays(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">Kierrokset</label>
+                        <input type="number" min="1" className="w-full bg-white p-2 rounded-lg text-sm border" value={templateCycles} onChange={(e) => setTemplateCycles(e.target.value)} />
+                      </div>
+                    </div>
+                    <button type="button" onClick={applyRecurrenceTemplateToEditing} className="w-full text-xs font-bold text-indigo-700 bg-indigo-100 border border-indigo-200 rounded-lg py-2">
+                      Luo toistopohjasta ajastetut jaksot
+                    </button>
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-slate-200">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Jaksokalenteri</div>
+                    <div className="space-y-1.5">
+                      {getUsageTimeline(editingMed, new Date()).map((period, idx) => {
+                        const statusStyle = period.status === 'current'
+                          ? 'bg-green-100 text-green-700 border-green-200'
+                          : period.status === 'future'
+                            ? 'bg-blue-100 text-blue-700 border-blue-200'
+                            : 'bg-slate-100 text-slate-600 border-slate-200';
+                        const statusText = period.status === 'current' ? 'Käynnissä' : period.status === 'future' ? 'Tuleva' : 'Mennyt';
+                        return (
+                          <div key={`timeline-${idx}`} className="flex items-center justify-between text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5">
+                            <span className="font-semibold text-slate-700">
+                              {formatDateFi(period.startDate) || 'Ei alkua'} - {formatDateFi(period.endDate) || 'Jatkuu'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded border text-[10px] font-bold ${statusStyle}`}>{statusText}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}

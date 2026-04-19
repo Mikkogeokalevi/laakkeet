@@ -140,6 +140,14 @@ export const ohjeData = [
         <li>Lisää seuraavan kuurin alku/loppu (esim. tauon jälkeen uusi 2 viikon jakso).</li>
       </ol>
       <p class="text-xs text-slate-600 mt-2">Etusivun <strong>Ajastetut kuurit</strong> -laatikko näyttää seuraavat tulevat jaksot. Jakso aktivoituu automaattisesti aloituspäivänä.</p>
+
+      <h4 class="font-bold text-slate-800 text-sm mb-2 mt-4">Uudet pikatoiminnot kuureille:</h4>
+      <ul class="list-disc list-inside text-xs text-slate-600 space-y-2">
+        <li><strong>Pikapainike kortissa:</strong> Avaa lääkekortti ja paina kalenteri-ikonia. Se lisää seuraavan jakson automaattisesti (oletus: 14 pv tauko).</li>
+        <li><strong>Huomisen kuurit:</strong> Etusivulla näkyy ilmoitus, jos jokin kuuri alkaa huomenna.</li>
+        <li><strong>Jaksokalenteri:</strong> Muokkausnäkymä näyttää kaikki jaksot tilalla <em>mennyt / käynnissä / tuleva</em>.</li>
+        <li><strong>Toistopohja:</strong> Muokkauksessa voit luoda sarjan jaksoja esim. 14 pv kuuri + 14 pv tauko × 3.</li>
+      </ul>
     `
   },
   {
