@@ -1,4 +1,3 @@
-// AuthScreen.js
 import React, { useState } from 'react';
 import { User, Lock, Loader2, AlertTriangle } from 'lucide-react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -38,11 +37,11 @@ const AuthScreen = () => {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 relative overflow-hidden">
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-         <img src="https://img.geocaching.com/be1cc7ca-c887-4f38-90b6-813ecf9b342b.png" alt="" className="w-3/4 opacity-[0.15] grayscale" />
+         <img src="./laakkeet_logo.png" alt="" className="w-3/4 opacity-[0.15] grayscale" />
       </div>
       <div className="w-full max-w-sm bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-xl z-10 border border-white">
         <div className="flex justify-center mb-6">
-          <img src="https://img.geocaching.com/be1cc7ca-c887-4f38-90b6-813ecf9b342b.png" alt="Logo" className="h-16 w-auto object-contain" />
+          <img src="./laakkeet_logo.png" alt="Logo" className="h-16 w-auto object-contain" />
         </div>
         <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">
           {isRegistering ? 'Luo tunnus' : 'Kirjaudu sisään'}
