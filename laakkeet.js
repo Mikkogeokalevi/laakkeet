@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Plus, Pill, Clock, Trash2, CheckCircle, History, X, BarChart2, Calendar, AlertTriangle, Pencil, CalendarPlus, LogOut, Loader2, Archive, ArchiveRestore, ChevronDown, ChevronUp, Check, Zap, Bell, BellOff, ArrowUpDown, ArrowUp, ArrowDown, HelpCircle, Package, RefreshCw, ShoppingCart, FileText, Clipboard, MessageSquare, ListChecks, RotateCcw, Share, MoreVertical, PlusSquare, Filter, Layers, LayoutList, Link, Box, Component, Menu, Search, Info, List, CalendarDays, AlertCircle, Volume2, VolumeX } from 'lucide-react';
+import { Plus, Pill, Clock, Trash2, CheckCircle, History, X, BarChart2, Calendar, AlertTriangle, Pencil, CalendarPlus, LogOut, User, Lock, Loader2, Archive, ArchiveRestore, ChevronDown, ChevronUp, Check, Zap, Bell, BellOff, ArrowUpDown, ArrowUp, ArrowDown, HelpCircle, Package, RefreshCw, ShoppingCart, FileText, Clipboard, MessageSquare, ListChecks, RotateCcw, Share, MoreVertical, PlusSquare, Filter, Layers, LayoutList, Link, Box, Component, Menu, Search, Info, List, CalendarDays, AlertCircle, Volume2, VolumeX } from 'lucide-react';
 
+import { ohjeData } from './ohjeet.js';
 import { auth, db, APP_ID } from './firebase.js';
 import { TIME_SLOTS, colorList, getColors, formatTime, getDayLabel, getCurrentDateTimeLocal } from './utils.js';
-import HelpView from './HelpView.js';
-import AuthScreen from './AuthScreen.js';
 
 // --- FIREBASE IMPORTS ---
 import { 
   onAuthStateChanged, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut
 } from 'firebase/auth';
 import { 
@@ -31,6 +32,124 @@ const WEEKDAYS = [
   { id: 6, label: 'La' },
   { id: 0, label: 'Su' }
 ];
+
+const getIconComponent = (iconName) => {
+  const icons = { Info, PlusSquare, Plus, CheckCircle, Zap, Package, BarChart2, Bell, List, Layers };
+  const Icon = icons[iconName] || HelpCircle;
+  return <Icon size={22} className="text-blue-600" />;
+};
+
+// --- OHJESIVU KOMPONENTTI ---
+const HelpView = ({ onClose }) => {
+  if (!ohjeData) return <div className="fixed inset-0 z-[60] bg-white p-5">Virhe: ohjeet.js puuttuu.</div>;
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-slate-50 flex flex-col animate-in slide-in-from-right duration-300 overflow-hidden">
+      <div className="bg-white px-4 py-4 border-b border-slate-200 flex items-center justify-between shadow-sm flex-none">
+        <div className="flex items-center gap-2 text-blue-600 font-bold text-lg">
+          <HelpCircle /> Käyttöopas
+        </div>
+        <button onClick={onClose} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors">
+          <X size={20} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-6 pb-20">
+        {ohjeData.map((section) => (
+          <section key={section.id} className={`${section.id === 'intro' ? 'bg-blue-50 border-blue-100' : 'bg-white shadow-sm border-slate-100'} p-5 rounded-2xl border`}>
+            <h3 className={`font-bold text-lg mb-3 flex items-center gap-2 ${section.id === 'intro' ? 'text-blue-800' : 'text-slate-800'}`}>
+              {section.icon && getIconComponent(section.icon)}
+              {section.title}
+            </h3>
+            <div className="text-sm text-slate-600" dangerouslySetInnerHTML={{ __html: section.content }} />
+          </section>
+        ))}
+
+        <div className="text-center text-xs text-slate-400 pt-6 pb-2">
+          Lääkemuistio v5.5 (Final Full) - {new Date().getFullYear()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- KIRJAUTUMISNÄKYMÄ ---
+const AuthScreen = () => {
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      if (isRegistering) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err) {
+      console.error(err);
+      let msg = "Tapahtui virhe.";
+      if (err.code === 'auth/invalid-email') msg = "Virheellinen sähköposti.";
+      if (err.code === 'auth/missing-password') msg = "Syötä salasana.";
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') msg = "Väärä sähköposti tai salasana.";
+      if (err.code === 'auth/weak-password') msg = "Salasanan tulee olla vähintään 6 merkkiä.";
+      if (err.code === 'auth/email-already-in-use') msg = "Sähköposti on jo käytössä.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 relative overflow-hidden">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+         <img src="./laakkeet_logo.png" alt="" className="w-3/4 opacity-[0.15] grayscale" />
+      </div>
+      <div className="w-full max-w-sm bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-xl z-10 border border-white">
+        <div className="flex justify-center mb-6">
+          <img src="./laakkeet_logo.png" alt="Logo" className="h-16 w-auto object-contain" />
+        </div>
+        <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">
+          {isRegistering ? 'Luo tunnus' : 'Kirjaudu sisään'}
+        </h2>
+        <p className="text-center text-slate-400 text-sm mb-8">
+          Lääkemuistio - Pidä kirjaa lääkkeistäsi
+        </p>
+        {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 flex items-center gap-2"><AlertTriangle size={16} /> {error}</div>}
+        <form onSubmit={handleAuth} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Sähköposti</label>
+            <div className="relative">
+              <User className="absolute left-3 top-3 text-slate-400" size={18} />
+              <input type="email" required className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" placeholder="sinun@sahkoposti.fi" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Salasana</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-3 text-slate-400" size={18} />
+              <input type="password" required className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" placeholder="******" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+          </div>
+          <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-200 active:scale-95 transition-all flex justify-center items-center gap-2 disabled:opacity-70">
+            {loading && <Loader2 size={20} className="animate-spin" />}
+            {isRegistering ? 'Rekisteröidy' : 'Kirjaudu'}
+          </button>
+        </form>
+        <div className="mt-6 text-center">
+          <button onClick={() => { setIsRegistering(!isRegistering); setError(''); }} className="text-sm text-slate-500 hover:text-blue-600 font-medium">
+            {isRegistering ? 'Onko sinulla jo tunnus? Kirjaudu' : 'Uusi käyttäjä? Luo tunnus'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // --- PÄÄSOVELLUS ---
 const MedicineTracker = () => {
