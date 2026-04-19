@@ -261,6 +261,28 @@ const MedicineTracker = () => {
     return activeWeekdays.includes(new Date(targetDate).getDay());
   };
 
+  const formatDateFi = (dateStr) => {
+    const parsed = parseDateOnly(dateStr);
+    if (!parsed) return '';
+    return parsed.toLocaleDateString('fi-FI');
+  };
+
+  const getUsagePeriodLabel = (med) => {
+    const start = formatDateFi(med.useStartDate);
+    const end = formatDateFi(med.useEndDate);
+    if (start && end) return `Käyttöjakso: ${start} - ${end}`;
+    if (start) return `Käyttöjakso alkaa: ${start}`;
+    if (end) return `Käyttöjakso päättyy: ${end}`;
+    return '';
+  };
+
+  const isFutureScheduledMed = (med, targetDate = new Date()) => {
+    const day = new Date(targetDate);
+    day.setHours(0, 0, 0, 0);
+    const start = parseDateOnly(med.useStartDate);
+    return !!start && day < start;
+  };
+
   // Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -308,7 +330,6 @@ const MedicineTracker = () => {
     const checkMissed = () => {
       const now = new Date();
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      const currentWeekday = now.getDay();
       
       const missed = [];
 
@@ -402,7 +423,6 @@ const MedicineTracker = () => {
 
     const checkReminders = () => {
       const now = new Date();
-      const currentWeekday = now.getDay();
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const today = now.toDateString();
 
@@ -953,6 +973,14 @@ const MedicineTracker = () => {
     return isMedActiveOnDate(m, new Date());
   });
 
+  const scheduledMeds = medications
+    .filter(m => !m.isArchived && m.showOnDashboard !== false && isFutureScheduledMed(m, new Date()))
+    .sort((a, b) => {
+      const aStart = parseDateOnly(a.useStartDate)?.getTime() || 0;
+      const bStart = parseDateOnly(b.useStartDate)?.getTime() || 0;
+      return aStart - bStart;
+    });
+
   const archivedMeds = medications.filter(m => m.isArchived);
   
   const shoppingListMeds = medications.filter(m => {
@@ -1211,6 +1239,25 @@ const MedicineTracker = () => {
                 </div>
               )}
 
+              {scheduledMeds.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-xl mb-2">
+                  <div className="font-bold text-xs uppercase tracking-wide mb-2">Ajastetut kuurit</div>
+                  <div className="space-y-1.5">
+                    {scheduledMeds.slice(0, 3).map((med) => (
+                      <div key={med.id} className="text-xs flex items-center justify-between gap-2">
+                        <span className="font-semibold truncate">{med.name}</span>
+                        <span className="bg-white border border-blue-100 rounded px-2 py-0.5 whitespace-nowrap">
+                          alkaa {formatDateFi(med.useStartDate)}
+                        </span>
+                      </div>
+                    ))}
+                    {scheduledMeds.length > 3 && (
+                      <div className="text-[11px] text-blue-600">+{scheduledMeds.length - 3} muuta ajastettua</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* UUSI: TERVETULOA TAKAISIN -ILMOITUS MYÖHÄSSÄ OLEVISTA LÄÄKKEISTÄ */}
               {missedMedsDialog && (
                 <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
@@ -1261,6 +1308,7 @@ const MedicineTracker = () => {
                 const c = getColors(med.colorKey || 'blue');
                 const hasSchedule = med.schedule && med.schedule.length > 0;
                 const isCombo = med.ingredients && med.ingredients.length > 0;
+                const usagePeriodLabel = getUsagePeriodLabel(med);
                 
                 // Määritellään rajat
                 const limit = med.lowStockLimit || 10;
@@ -1336,6 +1384,10 @@ const MedicineTracker = () => {
                                <span className="text-xs text-slate-500 truncate">{lastLog ? `Viimeksi: ${formatTime(lastLog.timestamp)}` : 'Ei otettu vielä'}</span>
                              )}
                            </div>
+                         )}
+
+                         {usagePeriodLabel && (
+                           <div className="mt-1 text-[11px] text-slate-500 truncate">{usagePeriodLabel}</div>
                          )}
                       </div>
                       
@@ -1742,6 +1794,7 @@ const MedicineTracker = () => {
                         const limit = med.lowStockLimit || 10;
                         const isCriticalStock = med.trackStock && !med.isCourse && med.stock !== null && med.stock <= limit;
                         const isWarningStock = med.trackStock && !med.isCourse && med.stock !== null && med.stock > limit && med.stock <= (limit + 5);
+                        const usagePeriodLabel = getUsagePeriodLabel(med);
                         
                         let isLate = false;
                         if (med.schedule && med.schedule.length > 0) {
@@ -1779,6 +1832,7 @@ const MedicineTracker = () => {
                                     Varasto: {med.stock}
                                   </span>
                                 )}
+                                {usagePeriodLabel && <span className="bg-blue-100 text-blue-700 px-1.5 rounded">{usagePeriodLabel}</span>}
                               </div>
                             </div>
                             <div className="flex gap-2">
