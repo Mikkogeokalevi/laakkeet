@@ -1,10 +1,10 @@
-const CACHE_NAME = 'laakkeet-cache-v2';
+const CACHE_NAME = 'laakkeet-cache-v3';
 
 const APP_SHELL = [
   './',
+  './index.html',
   './laakkeet.html',
   './laakkeet.css',
-  './laakkeet.js',
   './laakkeet.js?v=16',
   './manifest.json',
   './laakkeet_logo.png'
@@ -47,10 +47,10 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('./laakkeet.html', copy));
+          caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', copy));
           return response;
         })
-        .catch(() => caches.match('./laakkeet.html'))
+        .catch(() => caches.match('./index.html'))
     );
     return;
   }

@@ -338,7 +338,7 @@ const MedicineTracker = () => {
 
   // Ilmoituslogiikka (Selain)
   useEffect(() => {
-    if (Notification.permission === 'granted') setNotificationsEnabled(true);
+    if (("Notification" in window) && Notification.permission === 'granted') setNotificationsEnabled(true);
   }, []);
 
   const toggleNotifications = () => {
@@ -892,6 +892,26 @@ const MedicineTracker = () => {
   
   const criticalStockCount = activeMeds.filter(m => m.trackStock && !m.isCourse && m.stock <= (m.lowStockLimit || 10)).length;
 
+  const lateNowCount = activeMeds.reduce((count, med) => {
+    const schedule = med.schedule || [];
+    if (schedule.length === 0) return count;
+
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const lateSlots = schedule.filter((slotId) => {
+      if (isSlotTakenToday(med.id, slotId)) return false;
+      const timeStr = med.scheduleTimes?.[slotId] || TIME_SLOTS.find(s => s.id === slotId)?.defaultTime;
+      if (!timeStr) return false;
+      const [h, m] = timeStr.split(':').map(Number);
+      if (Number.isNaN(h) || Number.isNaN(m)) return false;
+      const slotMinutes = h * 60 + m;
+      return currentMinutes > slotMinutes + 15 && currentMinutes < slotMinutes + 720;
+    });
+
+    return count + lateSlots.length;
+  }, 0);
+
   const getLogName = (log) => {
     const med = medications.find(m => m.id === log.medId);
     return med ? med.name : (log.medName || 'Poistettu lääke');
@@ -1110,6 +1130,13 @@ const MedicineTracker = () => {
                 <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl mb-2 flex items-center gap-3 animate-pulse">
                    <AlertCircle size={20} className="text-red-600" />
                    <span className="font-bold text-sm">Huomio: {criticalStockCount} lääkettä loppumassa!</span>
+                </div>
+              )}
+
+              {lateNowCount > 0 && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl mb-2 flex items-center gap-3">
+                  <Clock size={20} className="text-amber-600" />
+                  <span className="font-bold text-sm">Myöhässä nyt: {lateNowCount} annosta merkitsemättä.</span>
                 </div>
               )}
 

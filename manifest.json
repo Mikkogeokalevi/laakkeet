@@ -1,10 +1,10 @@
 {
-  "id": "./laakkeet.html",
+  "id": "./",
   "name": "Lääkemuistio",
   "short_name": "Lääkkeet",
   "description": "Lääkemuistio lääkkeiden muistamiseen, kirjaamiseen ja varastoseurantaan.",
   "lang": "fi",
-  "start_url": "./laakkeet.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
