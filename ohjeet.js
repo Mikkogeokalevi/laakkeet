@@ -144,9 +144,12 @@ export const ohjeData = [
       <h4 class="font-bold text-slate-800 text-sm mb-2 mt-4">Uudet pikatoiminnot kuureille:</h4>
       <ul class="list-disc list-inside text-xs text-slate-600 space-y-2">
         <li><strong>Pikapainike kortissa:</strong> Avaa lääkekortti ja paina kalenteri-ikonia. Se lisää seuraavan jakson automaattisesti (oletus: 14 pv tauko).</li>
+        <li><strong>Tänään alkavat kuurit:</strong> Etusivulla näet nyt erillisen huomion kuureista, jotka alkavat juuri tänään.</li>
         <li><strong>Huomisen kuurit:</strong> Etusivulla näkyy ilmoitus, jos jokin kuuri alkaa huomenna.</li>
         <li><strong>Jaksokalenteri:</strong> Muokkausnäkymä näyttää kaikki jaksot tilalla <em>mennyt / käynnissä / tuleva</em>.</li>
+        <li><strong>Siirrä tulevia jaksoja:</strong> Muokkauksessa voit siirtää kaikki tulevat ajastetut jaksot yhdellä kertaa (esim. +7 päivää).</li>
         <li><strong>Toistopohja:</strong> Muokkauksessa voit luoda sarjan jaksoja esim. 14 pv kuuri + 14 pv tauko × 3.</li>
+        <li><strong>Hiljaiset tunnit:</strong> Valikon asetuksista voit määrittää kellonajat, jolloin push-ilmoituksia ei lähetetä.</li>
       </ul>
     `
   },

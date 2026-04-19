@@ -171,6 +171,27 @@ const MedicineTracker = () => {
   const [logs, setLogs] = useState([]);
   
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('laakkeet-quiet-hours-enabled') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [quietHoursStart, setQuietHoursStart] = useState(() => {
+    try {
+      return localStorage.getItem('laakkeet-quiet-hours-start') || '22:00';
+    } catch {
+      return '22:00';
+    }
+  });
+  const [quietHoursEnd, setQuietHoursEnd] = useState(() => {
+    try {
+      return localStorage.getItem('laakkeet-quiet-hours-end') || '07:00';
+    } catch {
+      return '07:00';
+    }
+  });
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try {
       return localStorage.getItem('laakkeet-dark-mode') === '1';
@@ -229,6 +250,7 @@ const MedicineTracker = () => {
   const [templateOnDays, setTemplateOnDays] = useState('14');
   const [templateOffDays, setTemplateOffDays] = useState('14');
   const [templateCycles, setTemplateCycles] = useState('3');
+  const [shiftFutureDays, setShiftFutureDays] = useState('7');
   const [lastGeneratedTemplatePeriods, setLastGeneratedTemplatePeriods] = useState([]);
 
   // PIKALISÄYS TILA
@@ -264,6 +286,16 @@ const MedicineTracker = () => {
     }
   }, [isDarkMode]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('laakkeet-quiet-hours-enabled', quietHoursEnabled ? '1' : '0');
+      localStorage.setItem('laakkeet-quiet-hours-start', quietHoursStart || '22:00');
+      localStorage.setItem('laakkeet-quiet-hours-end', quietHoursEnd || '07:00');
+    } catch {
+      // ei estä käyttöä, vaikka localStorage ei olisi saatavilla
+    }
+  }, [quietHoursEnabled, quietHoursStart, quietHoursEnd]);
+
   const parseDateOnly = (dateStr) => {
     if (!dateStr) return null;
     const [y, m, d] = dateStr.split('-').map(Number);
@@ -284,6 +316,27 @@ const MedicineTracker = () => {
     d.setDate(d.getDate() + days);
     d.setHours(0, 0, 0, 0);
     return d;
+  };
+
+  const timeToMinutes = (timeStr) => {
+    if (!timeStr || !timeStr.includes(':')) return null;
+    const [h, m] = timeStr.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    return h * 60 + m;
+  };
+
+  const isWithinQuietHours = (dateObj = new Date()) => {
+    if (!quietHoursEnabled) return false;
+    const startMin = timeToMinutes(quietHoursStart);
+    const endMin = timeToMinutes(quietHoursEnd);
+    if (startMin === null || endMin === null) return false;
+    if (startMin === endMin) return true;
+
+    const nowMin = dateObj.getHours() * 60 + dateObj.getMinutes();
+    if (startMin < endMin) {
+      return nowMin >= startMin && nowMin < endMin;
+    }
+    return nowMin >= startMin || nowMin < endMin;
   };
 
   const getUsagePeriods = (med) => {
@@ -355,6 +408,46 @@ const MedicineTracker = () => {
     });
 
     setEditingMed({ ...editingMed, scheduledPeriods: nextPeriods });
+    setLastGeneratedTemplatePeriods([]);
+  };
+
+  const shiftFutureScheduledPeriodsInEditing = () => {
+    if (!editingMed) return;
+    const shiftDays = parseInt(shiftFutureDays, 10);
+    if (!Number.isFinite(shiftDays) || shiftDays === 0) {
+      alert('Anna siirrolle päivämäärämuutos, esim. 7 tai -3.');
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const periods = editingMed.scheduledPeriods || [];
+    let shiftedCount = 0;
+    const shifted = periods.map((period) => {
+      const start = parseDateOnly(period?.startDate);
+      if (!start || start < today) return period;
+
+      shiftedCount += 1;
+      const nextStart = addDays(start, shiftDays);
+      const end = parseDateOnly(period?.endDate);
+      const nextEnd = end ? addDays(end, shiftDays) : null;
+      return {
+        ...period,
+        startDate: toDateInputValue(nextStart),
+        endDate: nextEnd ? toDateInputValue(nextEnd) : ''
+      };
+    });
+
+    if (shiftedCount === 0) {
+      alert('Ei siirrettäviä tulevia jaksoja.');
+      return;
+    }
+
+    const ok = window.confirm(`Siirretään ${shiftedCount} tulevaa jaksoa ${shiftDays > 0 ? '+' : ''}${shiftDays} päivää?`);
+    if (!ok) return;
+
+    setEditingMed({ ...editingMed, scheduledPeriods: shifted });
     setLastGeneratedTemplatePeriods([]);
   };
 
@@ -620,6 +713,7 @@ const MedicineTracker = () => {
 
     const checkReminders = () => {
       const now = new Date();
+      if (isWithinQuietHours(now)) return;
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const today = now.toDateString();
 
@@ -660,37 +754,46 @@ const MedicineTracker = () => {
     checkReminders();
     const interval = setInterval(checkReminders, 30000);
     return () => clearInterval(interval);
-  }, [medications, logs, notificationsEnabled]);
+  }, [medications, logs, notificationsEnabled, quietHoursEnabled, quietHoursStart, quietHoursEnd]);
 
   useEffect(() => {
     if (!notificationsEnabled || !user) return;
     if (!("Notification" in window) || Notification.permission !== 'granted') return;
 
-    const tomorrow = addDays(new Date(), 1);
-    const startsTomorrow = medications.filter((med) => {
-      if (med.isArchived || med.alertEnabled === false) return false;
-      return getUsagePeriods(med).some((period) => {
-        const start = parseDateOnly(period.startDate);
-        return !!start && start.getTime() === tomorrow.getTime();
+    const notifyStartsTomorrow = () => {
+      const now = new Date();
+      if (isWithinQuietHours(now)) return;
+
+      const tomorrow = addDays(now, 1);
+      const startsTomorrow = medications.filter((med) => {
+        if (med.isArchived || med.alertEnabled === false) return false;
+        return getUsagePeriods(med).some((period) => {
+          const start = parseDateOnly(period.startDate);
+          return !!start && start.getTime() === tomorrow.getTime();
+        });
       });
-    });
 
-    if (startsTomorrow.length === 0) return;
+      if (startsTomorrow.length === 0) return;
 
-    const dedupeKey = `startsTomorrow:${user.uid}:${toDateInputValue(tomorrow)}`;
-    try {
-      if (localStorage.getItem(dedupeKey) === '1') return;
-      localStorage.setItem(dedupeKey, '1');
-    } catch {
-      // jos localStorage ei toimi, jatketaan ilman deduplikointia
-    }
+      const dedupeKey = `startsTomorrow:${user.uid}:${toDateInputValue(tomorrow)}`;
+      try {
+        if (localStorage.getItem(dedupeKey) === '1') return;
+        localStorage.setItem(dedupeKey, '1');
+      } catch {
+        // jos localStorage ei toimi, jatketaan ilman deduplikointia
+      }
 
-    const names = startsTomorrow.slice(0, 3).map((m) => m.name).join(', ');
-    new Notification('Kuurisi alkaa huomenna', {
-      body: startsTomorrow.length > 3 ? `${names} + ${startsTomorrow.length - 3} muuta` : names,
-      icon: './laakkeet_logo.png'
-    });
-  }, [notificationsEnabled, medications, user]);
+      const names = startsTomorrow.slice(0, 3).map((m) => m.name).join(', ');
+      new Notification('Kuurisi alkaa huomenna', {
+        body: startsTomorrow.length > 3 ? `${names} + ${startsTomorrow.length - 3} muuta` : names,
+        icon: './laakkeet_logo.png'
+      });
+    };
+
+    notifyStartsTomorrow();
+    const interval = setInterval(notifyStartsTomorrow, 15 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [notificationsEnabled, medications, user, quietHoursEnabled, quietHoursStart, quietHoursEnd]);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -888,6 +991,7 @@ const MedicineTracker = () => {
     setTemplateOnDays('14');
     setTemplateOffDays('14');
     setTemplateCycles('3');
+    setShiftFutureDays('7');
     setLastGeneratedTemplatePeriods([]);
     setCurrentIngredients(med.ingredients || []);
   };
@@ -898,6 +1002,7 @@ const MedicineTracker = () => {
       ...editingMed,
       scheduledPeriods: [...(editingMed.scheduledPeriods || []), { startDate: '', endDate: '' }]
     });
+    setLastGeneratedTemplatePeriods([]);
   };
 
   const updateScheduledPeriodInEditing = (index, field, value) => {
@@ -905,6 +1010,7 @@ const MedicineTracker = () => {
     const nextPeriods = [...(editingMed.scheduledPeriods || [])];
     nextPeriods[index] = { ...(nextPeriods[index] || { startDate: '', endDate: '' }), [field]: value };
     setEditingMed({ ...editingMed, scheduledPeriods: nextPeriods });
+    setLastGeneratedTemplatePeriods([]);
   };
 
   const removeScheduledPeriodFromEditing = (index) => {
@@ -913,6 +1019,7 @@ const MedicineTracker = () => {
       ...editingMed,
       scheduledPeriods: (editingMed.scheduledPeriods || []).filter((_, i) => i !== index)
     });
+    setLastGeneratedTemplatePeriods([]);
   };
 
   const moveMedication = async (index, direction) => {
@@ -1254,6 +1361,20 @@ const MedicineTracker = () => {
     });
 
   const tomorrowDate = addDays(new Date(), 1);
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
+  const todayStartMeds = medications
+    .filter(m => !m.isArchived && m.showOnDashboard !== false)
+    .map((med) => {
+      const todayPeriod = getUsagePeriods(med).find((period) => {
+        const start = parseDateOnly(period.startDate);
+        return !!start && start.getTime() === todayDate.getTime();
+      });
+      return todayPeriod ? { med, period: todayPeriod } : null;
+    })
+    .filter(Boolean);
+
   const tomorrowStartMeds = medications
     .filter(m => !m.isArchived && m.showOnDashboard !== false)
     .map((med) => {
@@ -1475,6 +1596,32 @@ const MedicineTracker = () => {
                           {isDarkMode ? <Sun size={18} className="text-amber-500"/> : <Moon size={18} className="text-slate-400"/>}
                           {isDarkMode ? 'Vaalea teema' : 'Tumma teema'}
                         </button>
+                        <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                          <label className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-xs font-bold text-slate-700">Hiljaiset tunnit</span>
+                            <input
+                              type="checkbox"
+                              checked={quietHoursEnabled}
+                              onChange={(e) => setQuietHoursEnabled(e.target.checked)}
+                              className="w-4 h-4"
+                            />
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="time"
+                              value={quietHoursStart}
+                              onChange={(e) => setQuietHoursStart(e.target.value)}
+                              className="w-full text-xs bg-white p-1.5 rounded border"
+                            />
+                            <input
+                              type="time"
+                              value={quietHoursEnd}
+                              onChange={(e) => setQuietHoursEnd(e.target.value)}
+                              className="w-full text-xs bg-white p-1.5 rounded border"
+                            />
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-1">Ilmoituksia ei lähetetä tällä aikavälillä.</div>
+                        </div>
                         <div className="h-px bg-slate-100 my-1"></div>
                         <button onClick={() => {handleLogout(); setIsMenuOpen(false);}} className="flex items-center gap-3 p-3 rounded-lg hover:bg-red-50 text-red-600 text-sm font-medium text-left">
                           <LogOut size={18}/> Kirjaudu ulos
@@ -1517,6 +1664,18 @@ const MedicineTracker = () => {
                 <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl mb-2 flex items-center gap-3 animate-pulse">
                    <AlertCircle size={20} className="text-red-600" />
                    <span className="font-bold text-sm">Huomio: {criticalStockCount} lääkettä loppumassa!</span>
+                </div>
+              )}
+
+              {todayStartMeds.length > 0 && (
+                <div className="bg-emerald-100 border border-emerald-300 text-emerald-800 p-3 rounded-xl mb-2">
+                  <div className="font-bold text-xs uppercase tracking-wide mb-1">Kuurit alkavat tänään</div>
+                  <div className="text-xs space-y-1">
+                    {todayStartMeds.slice(0, 3).map(({ med }) => (
+                      <div key={`today-${med.id}`} className="font-semibold">• {med.name}</div>
+                    ))}
+                    {todayStartMeds.length > 3 && <div className="text-[11px]">+{todayStartMeds.length - 3} muuta</div>}
+                  </div>
                 </div>
               )}
 
@@ -2431,6 +2590,26 @@ const MedicineTracker = () => {
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-slate-200">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Siirrä tulevia jaksoja</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        className="w-24 bg-white p-2 rounded-lg text-sm border"
+                        value={shiftFutureDays}
+                        onChange={(e) => setShiftFutureDays(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={shiftFutureScheduledPeriodsInEditing}
+                        className="flex-1 text-xs font-bold text-sky-700 bg-sky-100 border border-sky-200 rounded-lg py-2"
+                      >
+                        Siirrä tulevat jaksot
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-1">Esim. 7 siirtää viikolla eteenpäin, -3 kolme päivää taaksepäin.</div>
                   </div>
 
                   <div className="mt-3 pt-3 border-t border-slate-200">

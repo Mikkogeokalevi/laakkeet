@@ -88,6 +88,7 @@ body {
 }
 
 .app-shell.dark-mode .bg-green-100,
+.app-shell.dark-mode .bg-emerald-100,
 .app-shell.dark-mode .bg-lime-100,
 .app-shell.dark-mode .bg-teal-100 {
   background-color: #052e16 !important;
@@ -124,9 +125,14 @@ body {
 
 .app-shell.dark-mode .border-green-200,
 .app-shell.dark-mode .border-green-300,
+.app-shell.dark-mode .border-emerald-300,
 .app-shell.dark-mode .border-lime-300,
 .app-shell.dark-mode .border-teal-300 {
   border-color: #166534 !important;
+}
+
+.app-shell.dark-mode .text-emerald-800 {
+  color: #86efac !important;
 }
 
 .app-shell.dark-mode .border-purple-300,
