@@ -1,8 +1,12 @@
-// HelpView.js
 import React from 'react';
-import { HelpCircle, X } from 'lucide-react';
+import { HelpCircle, X, Info, PlusSquare, Plus, CheckCircle, Zap, Package, BarChart2, Bell, List, Layers } from 'lucide-react';
 import { ohjeData } from './ohjeet.js';
-import { getIconComponent } from './vakiot.js';
+
+const getIconComponent = (iconName) => {
+  const icons = { Info, PlusSquare, Plus, CheckCircle, Zap, Package, BarChart2, Bell, List, Layers };
+  const Icon = icons[iconName] || HelpCircle;
+  return <Icon size={22} className="text-blue-600" />;
+};
 
 const HelpView = ({ onClose }) => {
   if (!ohjeData) return <div className="fixed inset-0 z-[60] bg-white p-5">Virhe: ohjeet.js puuttuu.</div>;
@@ -19,21 +23,18 @@ const HelpView = ({ onClose }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-6 pb-20">
-        {ohjeData.map((section) => {
-          const IconComp = getIconComponent(section.icon);
-          return (
-            <section key={section.id} className={`${section.id === 'intro' ? 'bg-blue-50 border-blue-100' : 'bg-white shadow-sm border-slate-100'} p-5 rounded-2xl border`}>
-              <h3 className={`font-bold text-lg mb-3 flex items-center gap-2 ${section.id === 'intro' ? 'text-blue-800' : 'text-slate-800'}`}>
-                {IconComp && <IconComp size={22} className="text-blue-600" />} 
-                {section.title}
-              </h3>
-              <div className="text-sm text-slate-600" dangerouslySetInnerHTML={{ __html: section.content }} />
-            </section>
-          );
-        })}
-        
+        {ohjeData.map((section) => (
+          <section key={section.id} className={`${section.id === 'intro' ? 'bg-blue-50 border-blue-100' : 'bg-white shadow-sm border-slate-100'} p-5 rounded-2xl border`}>
+            <h3 className={`font-bold text-lg mb-3 flex items-center gap-2 ${section.id === 'intro' ? 'text-blue-800' : 'text-slate-800'}`}>
+              {section.icon && getIconComponent(section.icon)}
+              {section.title}
+            </h3>
+            <div className="text-sm text-slate-600" dangerouslySetInnerHTML={{ __html: section.content }} />
+          </section>
+        ))}
+
         <div className="text-center text-xs text-slate-400 pt-6 pb-2">
-          Lääkemuistio v4.6 - {new Date().getFullYear()}
+          Lääkemuistio v5.5 (Final Full) - {new Date().getFullYear()}
         </div>
       </div>
     </div>
