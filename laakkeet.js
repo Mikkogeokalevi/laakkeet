@@ -13,7 +13,15 @@ import {
   createUserWithEmailAndPassword, 
   signOut
 } from 'firebase/auth';
-import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot } from 'firebase/firestore';
+import { 
+  collection, 
+  addDoc, 
+  deleteDoc, 
+  updateDoc, 
+  doc, 
+  onSnapshot, 
+  writeBatch
+} from 'firebase/firestore';
 
 // --- VAKIOT ---
 const TIME_SLOTS = [
@@ -557,7 +565,11 @@ const MedicineTracker = () => {
         order: maxOrder + 1, 
         isArchived: false
       };
-      await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'medications'), medData);
+      const batch = writeBatch(db);
+      const medsRef = collection(db, 'artifacts', APP_ID, 'users', user.uid, 'medications');
+      const newMedRef = doc(medsRef);
+      batch.set(newMedRef, medData);
+      await batch.commit();
       setNewMedName(''); setNewMedDosage(''); setIsAdding(false); setCurrentIngredients([]);
     } catch (error) { alert("Virhe lisäyksessä."); }
   };
@@ -567,7 +579,8 @@ const MedicineTracker = () => {
     if (!editingMed || !editingMed.name.trim() || !user) return;
     try {
       const medRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', editingMed.id);
-      await updateDoc(medRef, { 
+      const batch = writeBatch(db);
+      batch.update(medRef, { 
         name: editingMed.name.trim(), 
         dosage: editingMed.dosage ? editingMed.dosage.trim() : '', 
         stock: editingMed.trackStock ? (parseInt(editingMed.stock) || 0) : null,
@@ -582,6 +595,7 @@ const MedicineTracker = () => {
         showOnDashboard: editingMed.showOnDashboard !== undefined ? editingMed.showOnDashboard : true,
         alertEnabled: editingMed.alertEnabled !== undefined ? editingMed.alertEnabled : true 
       });
+      await batch.commit();
       setEditingMed(null);
     } catch (error) { alert("Virhe muokkauksessa."); }
   };
@@ -601,14 +615,16 @@ const MedicineTracker = () => {
     if (index + direction < 0 || index + direction >= activeMeds.length) return;
     const currentMed = activeMeds[index];
     const swapMed = activeMeds[index + direction];
-    let order1 = currentMed.order ?? currentMed.createdAt;
-    let order2 = swapMed.order ?? swapMed.createdAt;
-    if (order1 === order2) order2 = order1 + 1;
+    const order1 = currentMed.order !== undefined ? currentMed.order : index;
+    const order2 = swapMed.order !== undefined ? swapMed.order : (index + direction);
+
     try {
+      const batch = writeBatch(db);
       const medRef1 = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', currentMed.id);
       const medRef2 = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', swapMed.id);
-      await updateDoc(medRef1, { order: order2 });
-      await updateDoc(medRef2, { order: order1 });
+      batch.update(medRef1, { order: order2 });
+      batch.update(medRef2, { order: order1 });
+      await batch.commit();
     } catch (e) { console.error("Järjestäminen epäonnistui", e); }
   };
 
@@ -622,19 +638,24 @@ const MedicineTracker = () => {
     if (!quickAddName.trim() || !user || !quickAddDate) return;
     const stockItem = medications.find(m => m.name.toLowerCase() === quickAddName.trim().toLowerCase() && m.trackStock);
     try {
-      await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'logs'), {
+      const batch = writeBatch(db);
+      const logsRef = collection(db, 'artifacts', APP_ID, 'users', user.uid, 'logs');
+      const newLogRef = doc(logsRef);
+
+      batch.set(newLogRef, {
         medId: stockItem ? stockItem.id : 'quick_dose', 
         medName: quickAddName.trim(), 
         medColor: stockItem ? stockItem.colorKey : 'orange', 
-        slot: null, 
+        slot: null,
         timestamp: new Date(quickAddDate).toISOString(),
         reason: quickAddReason.trim(),
         ingredients: null
       });
       if (stockItem && stockItem.stock > 0) {
          const medRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', stockItem.id);
-         await updateDoc(medRef, { stock: stockItem.stock - 1 });
+         batch.update(medRef, { stock: Math.max(0, stockItem.stock - 1) });
       }
+      await batch.commit();
       setQuickAddName(''); setQuickAddReason(''); setIsQuickAdding(false);
     } catch(e) { alert("Virhe pikalisäyksessä"); }
   };
@@ -643,31 +664,47 @@ const MedicineTracker = () => {
     if (!user) return;
     try {
       const ingredientsSnapshot = med.ingredients && med.ingredients.length > 0 ? med.ingredients : null;
-      await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'logs'), {
+      const batch = writeBatch(db);
+      const logsRef = collection(db, 'artifacts', APP_ID, 'users', user.uid, 'logs');
+      const newLogRef = doc(logsRef);
+
+      batch.set(newLogRef, {
         medId: med.id, 
         medName: med.name, 
         medColor: med.colorKey, 
         slot: slotId, 
-        timestamp: new Date().toISOString(), 
-        reason: reasonText.trim(),
-        ingredients: ingredientsSnapshot 
+        timestamp: new Date().toISOString(),
+        reason: reasonText,
+        ingredients: ingredientsSnapshot
       });
+
       if (med.trackStock && med.stock > 0) {
          const medRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', med.id);
-         await updateDoc(medRef, { stock: med.stock - 1 });
+         batch.update(medRef, { stock: Math.max(0, med.stock - 1) });
       }
+
       if (med.ingredients && med.ingredients.length > 0) {
+        const ingredientTotals = new Map();
         for (const ing of med.ingredients) {
            const subMed = medications.find(m => m.name.toLowerCase() === ing.name.toLowerCase() && !m.isArchived);
            if (subMed && subMed.trackStock && subMed.stock !== null) {
               const amountToTake = parseInt(ing.count) || 1;
-              const newStock = subMed.stock - amountToTake;
-              const subMedRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', subMed.id);
-              await updateDoc(subMedRef, { stock: newStock });
+              const previous = ingredientTotals.get(subMed.id) || 0;
+              ingredientTotals.set(subMed.id, previous + amountToTake);
            }
         }
+
+        ingredientTotals.forEach((totalTake, subMedId) => {
+          const subMed = medications.find(m => m.id === subMedId);
+          if (!subMed || subMed.stock === null) return;
+          const subMedRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', subMed.id);
+          const newStock = Math.max(0, subMed.stock - totalTake);
+          batch.update(subMedRef, { stock: newStock });
+        });
       }
-    } catch (error) { console.error(error); }
+
+      await batch.commit();
+    } catch (error) { alert("Virhe lääkkeen kirjauksessa."); }
   };
 
   const handleRefill = async (med) => {
@@ -684,7 +721,11 @@ const MedicineTracker = () => {
     if (!manualLogMed || !manualDate || !user) return;
     try {
       const ingredientsSnapshot = manualLogMed.ingredients && manualLogMed.ingredients.length > 0 ? manualLogMed.ingredients : null;
-      await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'logs'), {
+      const batch = writeBatch(db);
+      const logsRef = collection(db, 'artifacts', APP_ID, 'users', user.uid, 'logs');
+      const newLogRef = doc(logsRef);
+
+      batch.set(newLogRef, {
         medId: manualLogMed.id, 
         medName: manualLogMed.name, 
         medColor: manualLogMed.colorKey, 
@@ -693,21 +734,33 @@ const MedicineTracker = () => {
         reason: manualReason.trim(),
         ingredients: ingredientsSnapshot
       });
+
       if (manualLogMed.trackStock && manualLogMed.stock > 0) {
          const medRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', manualLogMed.id);
-         await updateDoc(medRef, { stock: manualLogMed.stock - 1 });
+         batch.update(medRef, { stock: Math.max(0, manualLogMed.stock - 1) });
       }
+
       if (manualLogMed.ingredients && manualLogMed.ingredients.length > 0) {
+        const ingredientTotals = new Map();
         for (const ing of manualLogMed.ingredients) {
            const subMed = medications.find(m => m.name.toLowerCase() === ing.name.toLowerCase() && !m.isArchived);
            if (subMed && subMed.trackStock && subMed.stock !== null) {
               const amountToTake = parseInt(ing.count) || 1;
-              const newStock = subMed.stock - amountToTake;
-              const subMedRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', subMed.id);
-              await updateDoc(subMedRef, { stock: newStock });
+              const previous = ingredientTotals.get(subMed.id) || 0;
+              ingredientTotals.set(subMed.id, previous + amountToTake);
            }
         }
+
+        ingredientTotals.forEach((totalTake, subMedId) => {
+          const subMed = medications.find(m => m.id === subMedId);
+          if (!subMed || subMed.stock === null) return;
+          const subMedRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', subMed.id);
+          const newStock = Math.max(0, subMed.stock - totalTake);
+          batch.update(subMedRef, { stock: newStock });
+        });
       }
+
+      await batch.commit();
       setManualLogMed(null); setManualDate(''); setManualReason('');
     } catch (error) { alert("Virhe lisäyksessä."); }
   };
@@ -772,9 +825,19 @@ const MedicineTracker = () => {
   const handleDeleteAll = async () => {
     if (!user || !deleteDialog.medId) return;
     try {
-      await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', deleteDialog.medId));
+      const medRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', deleteDialog.medId);
       const logsToDelete = logs.filter(l => l.medId === deleteDialog.medId);
-      logsToDelete.forEach(log => deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'logs', log.id)));
+      const refsToDelete = [
+        medRef,
+        ...logsToDelete.map(log => doc(db, 'artifacts', APP_ID, 'users', user.uid, 'logs', log.id))
+      ];
+
+      for (let i = 0; i < refsToDelete.length; i += 400) {
+        const batch = writeBatch(db);
+        refsToDelete.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+        await batch.commit();
+      }
+
       if (showHistoryFor === deleteDialog.medId) setShowHistoryFor(null);
     } catch (e) { alert("Poisto epäonnistui"); }
     setDeleteDialog({ isOpen: false, mode: null, medId: null, medName: '', hasHistory: false });
@@ -785,13 +848,22 @@ const MedicineTracker = () => {
     try {
       const logsToUpdate = logs.filter(l => l.medId === deleteDialog.medId && !l.medName);
       const med = medications.find(m => m.id === deleteDialog.medId);
+
       if (med && logsToUpdate.length > 0) {
-         logsToUpdate.forEach(log => {
-           const logRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'logs', log.id);
-           updateDoc(logRef, { medName: med.name, medColor: med.colorKey });
-         });
+        for (let i = 0; i < logsToUpdate.length; i += 400) {
+          const batch = writeBatch(db);
+          logsToUpdate.slice(i, i + 400).forEach((log) => {
+            const logRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'logs', log.id);
+            batch.update(logRef, { medName: med.name, medColor: med.colorKey });
+          });
+          await batch.commit();
+        }
       }
-      await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', deleteDialog.medId));
+
+      const deleteBatch = writeBatch(db);
+      deleteBatch.delete(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', deleteDialog.medId));
+      await deleteBatch.commit();
+
       if (showHistoryFor === deleteDialog.medId) setShowHistoryFor(null);
     } catch (e) { alert("Poisto epäonnistui"); }
     setDeleteDialog({ isOpen: false, mode: null, medId: null, medName: '', hasHistory: false });
