@@ -5,27 +5,31 @@
 - Päätoiminnot:
   - lääkkeiden lisäys/muokkaus/arkistointi/poisto
   - aikataulutetut annokset (aamu/päivä/ilta/yö + viikonpäivät)
+  - käyttöjaksot (`useStartDate`, `useEndDate`) ja ajastetut jatkokuurit (`scheduledPeriods`)
   - annoskirjaus (myös manuaalinen ja pikalisäys)
   - historia + raportin generointi ja kopiointi
   - varastoseuranta + ostoslista
   - dosetit (yhdistelmälääkkeet, jotka vähentävät alilääkkeiden saldoja)
+  - tumma/vaalea teema (valikkokytkin, tallennus localStorageen)
   - Firebase Auth (kirjautuminen/rekisteröinti)
 
 ## 2) Tekninen toteutus
 - Ei bundleria tai Node build pipelinea tässä kansiossa.
 - Sovellus ajetaan suoraan selaimessa:
-  - `laakkeet.html` lataa Tailwind CDN:n, Babel Standalone:n ja importmapin.
+  - `index.html` lataa Tailwind CDN:n, Babel Standalone:n ja importmapin.
   - `laakkeet.js` ladataan `type="text/babel"` + `data-type="module"`.
 - React 18, lucide-react ikonit, Firebase (app/auth/firestore) tulevat CDN/ESM URL:ista.
 
 ## 3) Tiedostokartta (mitä mikäkin tekee)
+- `index.html`
+  - appin aktiivinen entrypoint, `<div id="root">`, importmapit, script-lataus.
 - `laakkeet.html`
-  - appin entrypoint, `<div id="root">`, importmapit, script-lataus.
+  - vanha/varasivu, ei oletus-entry nykyisessä käytössä.
 - `laakkeet.js`
   - **pääsovellus** ja käytännössä koko toiminnallisuus yhdessä tiedostossa.
   - sisältää myös AuthScreenin, HelpViewn, kaikki modaalit, datalogiikan ja renderöinnin.
 - `laakkeet.css`
-  - kevyt global-tyyli (tausta, fontti, scrollbar, mobiili-overscroll).
+  - kevyt global-tyyli (tausta, fontti, scrollbar, mobiili-overscroll) + dark-mode filter-tyyli.
 - `manifest.json`
   - PWA metadata (standalone/start_url/ikonit).
 - `ohjeet.js`
@@ -47,6 +51,7 @@
 - Medikaatiodokumentit sisältävät mm. kenttiä:
   - `name, dosage, stock, trackStock, lowStockLimit, isCourse`
   - `colorKey, schedule[], scheduleTimes{}, weekdays[]`
+  - `useStartDate, useEndDate, scheduledPeriods[]`
   - `ingredients[]` (dosetti), `showOnDashboard`, `alertEnabled`, `isArchived`, `order`, `createdAt`
 - Logidokumentit sisältävät mm. kenttiä:
   - `medId, medName, medColor, slot, timestamp, reason, ingredients`
@@ -58,8 +63,13 @@
   - `onSnapshot` kuuntelee lääkkeet + logit reaaliaikaisesti.
 - Aikataulut:
   - `TIME_SLOTS` (aamu/päivä/ilta/yö) + viikonpäiväfiltteri.
+- Käyttöjaksot:
+  - aktiivisuus määräytyy sekä viikonpäivistä että siitä, osuuko päivä johonkin käyttöjaksoon.
+  - tulevat jaksot voidaan tallentaa samaan lääkkeeseen `scheduledPeriods`-taulukkoon.
 - Dosetti:
   - kun dosetti kirjataan otetuksi, myös koostumuksen lääkkeiden varastoa vähennetään.
+- Teema:
+  - tumma teema kytketään valikosta; tila säilyy avaimessa `laakkeet-dark-mode`.
 - Myöhästymislogiikka:
   - lääkkeet tunnistetaan myöhästyneiksi ajan perusteella,
   - voidaan merkitä "UNOHDUS"-logiksi.
@@ -91,7 +101,7 @@
   3. varmista ettei auth- tai Firestore-polku muuttunut vahingossa
 
 ## 8) Nopeat referenssit
-- Entry: `laakkeet.html`
+- Entry: `index.html`
 - Päälogiikka: `laakkeet.js`
 - Ohjetekstit: `ohjeet.js`
 - Firebase setup: `firebase.js`
@@ -100,7 +110,7 @@
 ## 9) Valmiit ylläpitotyökalut
 1. `sw.js`
    - perus offline-cache app shellille toteutettu
-   - rekisteröinti lisätty `laakkeet.html`:ään
+   - rekisteröinti lisätty `index.html`:ään
 2. `varmuuskopio.bat`
    - luo aikaleimatun varmuuskopion hakemistoon `c:\Users\Tompe\Documents\backupit\laakkeet\...`
 3. `vie_githubiin.bat`
@@ -109,4 +119,10 @@
 
 ## 10) Käytännön tila
 - `vie_githubiin.bat` on testattu ajamalla ja meni läpi onnistuneesti.
-- PWA-metadataa on kovennettu mobiilikäyttöä varten (`manifest.json`, `laakkeet.html`, `sw.js`).
+- PWA-metadataa on kovennettu mobiilikäyttöä varten (`manifest.json`, `index.html`, `sw.js`).
+
+## 11) Muista aina päivityksissä (cache)
+- Kun muutat käyttäjälle näkyvää toiminnallisuutta tai ulkoasua:
+  1. päivitä `sw.js` → `CACHE_NAME` (+ tarvittaessa app shellin versionoidut URLit)
+  2. päivitä `index.html` → `laakkeet.js?v=...`
+- Tämä vähentää tilanteita, joissa puhelin näyttää vanhaa versiota.

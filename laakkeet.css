@@ -10,14 +10,156 @@ body {
 }
 
 .dark-mode {
-  filter: invert(1) hue-rotate(180deg);
+  background: #0b1220;
+  color: #e2e8f0;
 }
 
-.dark-mode img,
-.dark-mode video,
-.dark-mode canvas,
-.dark-mode svg[data-no-invert='true'] {
-  filter: invert(1) hue-rotate(180deg);
+.dark-mode .bg-slate-50,
+.dark-mode .bg-slate-100,
+.dark-mode .bg-slate-200,
+.dark-mode .bg-slate-50\/40,
+.dark-mode .bg-slate-50\/50,
+.dark-mode .bg-slate-100\/60,
+.dark-mode .bg-slate-900\/60 {
+  background-color: #111827 !important;
+}
+
+.dark-mode .bg-white,
+.dark-mode .bg-white\/50,
+.dark-mode .bg-white\/60,
+.dark-mode .bg-white\/80,
+.dark-mode .bg-white\/90,
+.dark-mode .bg-white\/95 {
+  background-color: #0f172a !important;
+}
+
+.dark-mode .text-slate-900,
+.dark-mode .text-slate-800,
+.dark-mode .text-slate-700,
+.dark-mode .text-slate-600,
+.dark-mode .text-slate-500,
+.dark-mode .text-slate-400 {
+  color: #cbd5e1 !important;
+}
+
+.dark-mode .text-blue-800,
+.dark-mode .text-blue-700,
+.dark-mode .text-blue-600,
+.dark-mode .text-blue-500 {
+  color: #93c5fd !important;
+}
+
+.dark-mode .border,
+.dark-mode .border-slate-50,
+.dark-mode .border-slate-100,
+.dark-mode .border-slate-200,
+.dark-mode .border-slate-300 {
+  border-color: #334155 !important;
+}
+
+.dark-mode .shadow-sm,
+.dark-mode .shadow-md,
+.dark-mode .shadow-lg,
+.dark-mode .shadow-xl,
+.dark-mode .shadow-2xl {
+  box-shadow: 0 10px 25px rgba(2, 6, 23, 0.45) !important;
+}
+
+.dark-mode .hover\:bg-slate-50:hover,
+.dark-mode .hover\:bg-slate-100:hover,
+.dark-mode .hover\:bg-slate-200:hover {
+  background-color: #1e293b !important;
+}
+
+.dark-mode .hover\:text-slate-600:hover,
+.dark-mode .hover\:text-slate-700:hover,
+.dark-mode .hover\:text-blue-600:hover,
+.dark-mode .hover\:text-red-600:hover,
+.dark-mode .hover\:text-orange-500:hover {
+  color: #f8fafc !important;
+}
+
+/* Värikortit (lääkkeiden värit) – tummaan teemaan sovitetut sävyt */
+.dark-mode .bg-blue-50,
+.dark-mode .bg-blue-100,
+.dark-mode .bg-blue-50\/40,
+.dark-mode .bg-blue-50\/50 {
+  background-color: #172554 !important;
+}
+
+.dark-mode .bg-green-100,
+.dark-mode .bg-lime-100,
+.dark-mode .bg-teal-100 {
+  background-color: #052e16 !important;
+}
+
+.dark-mode .bg-purple-100,
+.dark-mode .bg-fuchsia-100,
+.dark-mode .bg-indigo-100 {
+  background-color: #2e1065 !important;
+}
+
+.dark-mode .bg-orange-100,
+.dark-mode .bg-amber-100 {
+  background-color: #431407 !important;
+}
+
+.dark-mode .bg-red-50,
+.dark-mode .bg-red-100,
+.dark-mode .bg-red-50\/40 {
+  background-color: #450a0a !important;
+}
+
+.dark-mode .bg-cyan-100 {
+  background-color: #083344 !important;
+}
+
+.dark-mode .border-blue-100,
+.dark-mode .border-blue-200,
+.dark-mode .border-blue-300,
+.dark-mode .border-blue-400,
+.dark-mode .border-blue-500 {
+  border-color: #1d4ed8 !important;
+}
+
+.dark-mode .border-green-200,
+.dark-mode .border-green-300,
+.dark-mode .border-lime-300,
+.dark-mode .border-teal-300 {
+  border-color: #166534 !important;
+}
+
+.dark-mode .border-purple-300,
+.dark-mode .border-fuchsia-300,
+.dark-mode .border-indigo-300 {
+  border-color: #6d28d9 !important;
+}
+
+.dark-mode .border-orange-200,
+.dark-mode .border-orange-300,
+.dark-mode .border-amber-300 {
+  border-color: #c2410c !important;
+}
+
+.dark-mode .border-red-200,
+.dark-mode .border-red-300,
+.dark-mode .border-red-400,
+.dark-mode .border-red-500 {
+  border-color: #b91c1c !important;
+}
+
+/* Inputit ja selectit */
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+.dark-mode input::placeholder,
+.dark-mode textarea::placeholder {
+  color: #94a3b8 !important;
 }
 
 /* Piilotetaan scrollbarit mutta sallitaan scrollaus */

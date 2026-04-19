@@ -1,6 +1,6 @@
 // ohjeet.js
-// Lääkemuistion laajat käyttöohjeet (Päivitetty versiolle 2.0)
-// Sisältää ohjeet dosetin hälytysvalinnalle ja parannetulle historialle.
+// Lääkemuistion laajat käyttöohjeet (Päivitetty versiolle 2.1)
+// Sisältää ohjeet käyttöjaksoihin, ajastettuihin jatkokuureihin ja tummaan teemaan.
 
 export const ohjeData = [
   {
@@ -61,6 +61,7 @@ export const ohjeData = [
           <strong class="block text-sm text-blue-800 mb-1">A) Yksittäinen lääke</strong>
           <ul class="list-disc list-inside text-xs text-slate-700 space-y-2">
             <li><strong>Nimi:</strong> Esim. "Burana".</li>
+            <li><strong>Käyttöjakso:</strong> Voit antaa alkamis- ja loppupäivän (esim. kuuri 14 päivää).</li>
             <li><strong>Seuraa varastoa:</strong> Laita rasti, jos haluat laskurin.
                 <ul class="list-disc list-inside ml-4 mt-1 text-slate-500">
                     <li><em>Varastossa:</em> Nykyinen määrä (esim. 50).</li>
@@ -130,6 +131,15 @@ export const ohjeData = [
 
       <h4 class="font-bold text-slate-800 text-sm mb-2">Jos unohdit merkitä:</h4>
       <p class="text-xs text-slate-600 mb-2">Jos lääke on "virallisesti" myöhässä (yli 15 min), sovellus avaa seuraavalla kerralla automaattisesti ikkunan, joka muistuttaa rästissä olevista lääkkeistä.</p>
+
+      <h4 class="font-bold text-slate-800 text-sm mb-2 mt-4">Kuuri, tauko ja jatko samalle lääkkeelle:</h4>
+      <ol class="list-decimal list-inside text-xs text-slate-600 space-y-2">
+        <li>Avaa lääkekortti ja paina <strong>Muokkaa</strong>.</li>
+        <li>Aseta nykyinen <strong>Käyttöjakso</strong> (alku/loppu).</li>
+        <li>Kohdassa <strong>Ajastetut jatkokuurit</strong> paina <strong>+ Lisää jakso</strong>.</li>
+        <li>Lisää seuraavan kuurin alku/loppu (esim. tauon jälkeen uusi 2 viikon jakso).</li>
+      </ol>
+      <p class="text-xs text-slate-600 mt-2">Etusivun <strong>Ajastetut kuurit</strong> -laatikko näyttää seuraavat tulevat jaksot. Jakso aktivoituu automaattisesti aloituspäivänä.</p>
     `
   },
   {
@@ -176,6 +186,19 @@ export const ohjeData = [
         <li>Paina alareunan oranssia <strong class="text-orange-500">Salama</strong>-nappia.</li>
         <li>Valitse lääke tai kirjoita nimi.</li>
         <li>Kirjoita syy ja paina "Kirjaa".</li>
+      </ol>
+    `
+  },
+  {
+    id: 'theme',
+    title: '8. Tumma teema',
+    icon: 'Layers',
+    content: `
+      <p class="text-xs text-slate-600 mb-2">Voit vaihtaa teeman suoraan valikosta ilman lisäasetuksia.</p>
+      <ol class="list-decimal list-inside text-xs text-slate-600 space-y-1">
+        <li>Paina yläkulman <strong>valikkoa</strong> (kolme viivaa).</li>
+        <li>Valitse <strong>Tumma teema</strong> tai <strong>Vaalea teema</strong>.</li>
+        <li>Valinta muistetaan automaattisesti seuraaville kerroille.</li>
       </ol>
     `
   }

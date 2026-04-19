@@ -1,11 +1,12 @@
-const CACHE_NAME = 'laakkeet-cache-v11';
+const CACHE_NAME = 'laakkeet-cache-v13';
 
 const APP_SHELL = [
   './',
   './index.html',
   './laakkeet.html',
   './laakkeet.css',
-  './laakkeet.js?v=24',
+  './laakkeet.js?v=25',
+  './ohjeet.js',
   './utils.js',
   './HelpView.js',
   './AuthScreen.js',
