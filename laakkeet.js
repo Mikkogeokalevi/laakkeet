@@ -229,6 +229,7 @@ const MedicineTracker = () => {
   const [templateOnDays, setTemplateOnDays] = useState('14');
   const [templateOffDays, setTemplateOffDays] = useState('14');
   const [templateCycles, setTemplateCycles] = useState('3');
+  const [lastGeneratedTemplatePeriods, setLastGeneratedTemplatePeriods] = useState([]);
 
   // PIKALISÄYS TILA
   const [isQuickAdding, setIsQuickAdding] = useState(false);
@@ -333,6 +334,28 @@ const MedicineTracker = () => {
       ...editingMed,
       scheduledPeriods: [...(editingMed.scheduledPeriods || []), ...generated]
     });
+    setLastGeneratedTemplatePeriods(generated);
+  };
+
+  const undoLastRecurrenceTemplateFromEditing = () => {
+    if (!editingMed || lastGeneratedTemplatePeriods.length === 0) return;
+
+    const shouldUndo = window.confirm('Haluatko varmasti kumota viimeisimmän pohjalisäyksen?');
+    if (!shouldUndo) return;
+
+    const nextPeriods = [...(editingMed.scheduledPeriods || [])];
+    const generatedReversed = [...lastGeneratedTemplatePeriods].reverse();
+
+    generatedReversed.forEach((generatedPeriod) => {
+      const idx = nextPeriods
+        .map((p, i) => ({ p, i }))
+        .reverse()
+        .find(({ p }) => (p?.startDate || '') === (generatedPeriod.startDate || '') && (p?.endDate || '') === (generatedPeriod.endDate || ''))?.i;
+      if (idx !== undefined) nextPeriods.splice(idx, 1);
+    });
+
+    setEditingMed({ ...editingMed, scheduledPeriods: nextPeriods });
+    setLastGeneratedTemplatePeriods([]);
   };
 
   const isDateWithinPeriod = (day, period) => {
@@ -865,6 +888,7 @@ const MedicineTracker = () => {
     setTemplateOnDays('14');
     setTemplateOffDays('14');
     setTemplateCycles('3');
+    setLastGeneratedTemplatePeriods([]);
     setCurrentIngredients(med.ingredients || []);
   };
 
@@ -2428,6 +2452,15 @@ const MedicineTracker = () => {
                     <button type="button" onClick={applyRecurrenceTemplateToEditing} className="w-full text-xs font-bold text-indigo-700 bg-indigo-100 border border-indigo-200 rounded-lg py-2">
                       Luo toistopohjasta ajastetut jaksot
                     </button>
+                    {lastGeneratedTemplatePeriods.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={undoLastRecurrenceTemplateFromEditing}
+                        className="w-full mt-2 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-lg py-2"
+                      >
+                        Kumoa viimeisin pohjalisäys
+                      </button>
+                    )}
                   </div>
 
                   <div className="mt-3 pt-3 border-t border-slate-200">
