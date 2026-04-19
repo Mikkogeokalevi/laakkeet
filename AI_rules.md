@@ -97,13 +97,16 @@
 - Firebase setup: `firebase.js`
 - Perustyylit: `laakkeet.css`
 
-## 9) Seuraava siivous- ja kehitysrunko
-1. `sw.js` (service worker)
-   - lisätään perus offline-cache app shellille (`laakkeet.html`, `laakkeet.js`, `laakkeet.css`, `manifest.json`, logo)
-   - rekisteröinti `laakkeet.html`:ään turvallisella fallbackilla
+## 9) Valmiit ylläpitotyökalut
+1. `sw.js`
+   - perus offline-cache app shellille toteutettu
+   - rekisteröinti lisätty `laakkeet.html`:ään
 2. `varmuuskopio.bat`
-   - odottaa käyttäjän antamaa esimerkkipohjaa toisesta projektista
-   - tavoitteena yksi komento paikalliselle varmuuskopiolle
+   - luo aikaleimatun varmuuskopion hakemistoon `c:\Users\Tompe\Documents\backupit\laakkeet\...`
 3. `vie_githubiin.bat`
-   - odottaa käyttäjän antamaa esimerkkipohjaa toisesta projektista
-   - tavoitteena turvallinen push-flow (status, add, commit-viesti, push)
+   - force-push-pohjainen GitHub-päivitys (`main`)
+   - `errorlevel`-tarkistukset korjattu luotettavaan muotoon
+
+## 10) Käytännön tila
+- `vie_githubiin.bat` on testattu ajamalla ja meni läpi onnistuneesti.
+- PWA-metadataa on kovennettu mobiilikäyttöä varten (`manifest.json`, `laakkeet.html`, `sw.js`).
