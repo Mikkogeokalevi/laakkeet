@@ -243,16 +243,49 @@ const MedicineTracker = () => {
     return new Date(y, m - 1, d, 0, 0, 0, 0);
   };
 
-  const isWithinUsagePeriod = (med, targetDate = new Date()) => {
-    const day = new Date(targetDate);
-    day.setHours(0, 0, 0, 0);
+  const getUsagePeriods = (med) => {
+    const periods = [];
+    if (med.useStartDate || med.useEndDate) {
+      periods.push({ startDate: med.useStartDate || null, endDate: med.useEndDate || null });
+    }
+    if (Array.isArray(med.scheduledPeriods)) {
+      med.scheduledPeriods.forEach((p) => {
+        if (!p) return;
+        if (!p.startDate && !p.endDate) return;
+        periods.push({ startDate: p.startDate || null, endDate: p.endDate || null });
+      });
+    }
 
-    const start = parseDateOnly(med.useStartDate);
-    const end = parseDateOnly(med.useEndDate);
+    return periods.sort((a, b) => {
+      const aStart = parseDateOnly(a.startDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const bStart = parseDateOnly(b.startDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return aStart - bStart;
+    });
+  };
 
+  const isDateWithinPeriod = (day, period) => {
+    const start = parseDateOnly(period.startDate);
+    const end = parseDateOnly(period.endDate);
     if (start && day < start) return false;
     if (end && day > end) return false;
     return true;
+  };
+
+  const getNextFutureUsagePeriod = (med, targetDate = new Date()) => {
+    const day = new Date(targetDate);
+    day.setHours(0, 0, 0, 0);
+    return getUsagePeriods(med).find((period) => {
+      const start = parseDateOnly(period.startDate);
+      return !!start && day < start;
+    }) || null;
+  };
+
+  const isWithinUsagePeriod = (med, targetDate = new Date()) => {
+    const day = new Date(targetDate);
+    day.setHours(0, 0, 0, 0);
+    const periods = getUsagePeriods(med);
+    if (periods.length === 0) return true;
+    return periods.some((period) => isDateWithinPeriod(day, period));
   };
 
   const isMedActiveOnDate = (med, targetDate = new Date()) => {
@@ -268,8 +301,14 @@ const MedicineTracker = () => {
   };
 
   const getUsagePeriodLabel = (med) => {
-    const start = formatDateFi(med.useStartDate);
-    const end = formatDateFi(med.useEndDate);
+    const periods = getUsagePeriods(med);
+    if (periods.length === 0) return '';
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const activePeriod = periods.find((period) => isDateWithinPeriod(now, period));
+    const periodToShow = activePeriod || periods[0];
+    const start = formatDateFi(periodToShow.startDate);
+    const end = formatDateFi(periodToShow.endDate);
     if (start && end) return `Käyttöjakso: ${start} - ${end}`;
     if (start) return `Käyttöjakso alkaa: ${start}`;
     if (end) return `Käyttöjakso päättyy: ${end}`;
@@ -277,10 +316,7 @@ const MedicineTracker = () => {
   };
 
   const isFutureScheduledMed = (med, targetDate = new Date()) => {
-    const day = new Date(targetDate);
-    day.setHours(0, 0, 0, 0);
-    const start = parseDateOnly(med.useStartDate);
-    return !!start && day < start;
+    return !!getNextFutureUsagePeriod(med, targetDate);
   };
 
   // Auth Listener
@@ -584,6 +620,7 @@ const MedicineTracker = () => {
         weekdays: selectedWeekdays,
         useStartDate: newUseStartDate || null,
         useEndDate: newUseEndDate || null,
+        scheduledPeriods: [],
         ingredients: addMode === 'dosett' ? currentIngredients : [], 
         showOnDashboard: addMode === 'dosett' ? true : showOnDashboard,
         alertEnabled: newMedAlertEnabled,
@@ -607,6 +644,19 @@ const MedicineTracker = () => {
       alert("Käyttöjakson loppupäivä ei voi olla ennen alkupäivää.");
       return;
     }
+
+    const normalizedScheduledPeriods = (editingMed.scheduledPeriods || [])
+      .filter((p) => p && (p.startDate || p.endDate))
+      .map((p) => ({ startDate: p.startDate || null, endDate: p.endDate || null }));
+
+    const invalidScheduledPeriod = normalizedScheduledPeriods.find(
+      (p) => p.startDate && p.endDate && p.endDate < p.startDate
+    );
+    if (invalidScheduledPeriod) {
+      alert("Ajastetun kuurin loppupäivä ei voi olla ennen alkupäivää.");
+      return;
+    }
+
     try {
       const medRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'medications', editingMed.id);
       const batch = writeBatch(db);
@@ -623,6 +673,7 @@ const MedicineTracker = () => {
         weekdays: editingMed.weekdays || [0,1,2,3,4,5,6],
         useStartDate: editingMed.useStartDate || null,
         useEndDate: editingMed.useEndDate || null,
+        scheduledPeriods: normalizedScheduledPeriods,
         ingredients: currentIngredients,
         showOnDashboard: editingMed.showOnDashboard !== undefined ? editingMed.showOnDashboard : true,
         alertEnabled: editingMed.alertEnabled !== undefined ? editingMed.alertEnabled : true 
@@ -638,9 +689,35 @@ const MedicineTracker = () => {
       weekdays: med.weekdays || [0,1,2,3,4,5,6],
       useStartDate: med.useStartDate || '',
       useEndDate: med.useEndDate || '',
+      scheduledPeriods: Array.isArray(med.scheduledPeriods)
+        ? med.scheduledPeriods.map((p) => ({ startDate: p?.startDate || '', endDate: p?.endDate || '' }))
+        : [],
       alertEnabled: med.alertEnabled !== undefined ? med.alertEnabled : true 
     });
     setCurrentIngredients(med.ingredients || []);
+  };
+
+  const addScheduledPeriodToEditing = () => {
+    if (!editingMed) return;
+    setEditingMed({
+      ...editingMed,
+      scheduledPeriods: [...(editingMed.scheduledPeriods || []), { startDate: '', endDate: '' }]
+    });
+  };
+
+  const updateScheduledPeriodInEditing = (index, field, value) => {
+    if (!editingMed) return;
+    const nextPeriods = [...(editingMed.scheduledPeriods || [])];
+    nextPeriods[index] = { ...(nextPeriods[index] || { startDate: '', endDate: '' }), [field]: value };
+    setEditingMed({ ...editingMed, scheduledPeriods: nextPeriods });
+  };
+
+  const removeScheduledPeriodFromEditing = (index) => {
+    if (!editingMed) return;
+    setEditingMed({
+      ...editingMed,
+      scheduledPeriods: (editingMed.scheduledPeriods || []).filter((_, i) => i !== index)
+    });
   };
 
   const moveMedication = async (index, direction) => {
@@ -976,8 +1053,8 @@ const MedicineTracker = () => {
   const scheduledMeds = medications
     .filter(m => !m.isArchived && m.showOnDashboard !== false && isFutureScheduledMed(m, new Date()))
     .sort((a, b) => {
-      const aStart = parseDateOnly(a.useStartDate)?.getTime() || 0;
-      const bStart = parseDateOnly(b.useStartDate)?.getTime() || 0;
+      const aStart = parseDateOnly(getNextFutureUsagePeriod(a, new Date())?.startDate)?.getTime() || 0;
+      const bStart = parseDateOnly(getNextFutureUsagePeriod(b, new Date())?.startDate)?.getTime() || 0;
       return aStart - bStart;
     });
 
@@ -1243,14 +1320,18 @@ const MedicineTracker = () => {
                 <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-xl mb-2">
                   <div className="font-bold text-xs uppercase tracking-wide mb-2">Ajastetut kuurit</div>
                   <div className="space-y-1.5">
-                    {scheduledMeds.slice(0, 3).map((med) => (
-                      <div key={med.id} className="text-xs flex items-center justify-between gap-2">
-                        <span className="font-semibold truncate">{med.name}</span>
-                        <span className="bg-white border border-blue-100 rounded px-2 py-0.5 whitespace-nowrap">
-                          alkaa {formatDateFi(med.useStartDate)}
-                        </span>
-                      </div>
-                    ))}
+                    {scheduledMeds.slice(0, 3).map((med) => {
+                      const nextPeriod = getNextFutureUsagePeriod(med, new Date());
+                      if (!nextPeriod) return null;
+                      return (
+                        <div key={med.id} className="text-xs flex items-center justify-between gap-2">
+                          <span className="font-semibold truncate">{med.name}</span>
+                          <span className="bg-white border border-blue-100 rounded px-2 py-0.5 whitespace-nowrap">
+                            alkaa {formatDateFi(nextPeriod.startDate)}
+                          </span>
+                        </div>
+                      );
+                    })}
                     {scheduledMeds.length > 3 && (
                       <div className="text-[11px] text-blue-600">+{scheduledMeds.length - 3} muuta ajastettua</div>
                     )}
@@ -2071,6 +2152,61 @@ const MedicineTracker = () => {
                         onChange={(e) => setEditingMed({ ...editingMed, useEndDate: e.target.value })}
                       />
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {(!editingMed.ingredients || editingMed.ingredients.length === 0) && (
+                <div className="mb-6 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase">Ajastetut jatkokuurit</label>
+                    <button
+                      type="button"
+                      onClick={addScheduledPeriodToEditing}
+                      className="text-xs font-bold text-blue-600 bg-white border border-blue-200 rounded-md px-2 py-1"
+                    >
+                      + Lisää jakso
+                    </button>
+                  </div>
+
+                  {(editingMed.scheduledPeriods || []).length === 0 && (
+                    <div className="text-[11px] text-slate-500">Ei ajastettuja jatkojaksoja.</div>
+                  )}
+
+                  <div className="space-y-2">
+                    {(editingMed.scheduledPeriods || []).map((period, idx) => (
+                      <div key={idx} className="bg-white border border-slate-200 rounded-lg p-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Alkaa</label>
+                            <input
+                              type="date"
+                              className="w-full bg-white p-2 rounded-lg text-sm border focus:border-blue-500"
+                              value={period.startDate || ''}
+                              onChange={(e) => updateScheduledPeriodInEditing(idx, 'startDate', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Loppuu</label>
+                            <input
+                              type="date"
+                              className="w-full bg-white p-2 rounded-lg text-sm border focus:border-blue-500"
+                              value={period.endDate || ''}
+                              onChange={(e) => updateScheduledPeriodInEditing(idx, 'endDate', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end mt-2">
+                          <button
+                            type="button"
+                            onClick={() => removeScheduledPeriodFromEditing(idx)}
+                            className="text-[11px] text-red-600 font-semibold"
+                          >
+                            Poista jakso
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
